@@ -1,0 +1,6 @@
+{
+  "name": "iKwath",
+  "description": "Touchscreen kiosk UI for iKwath smart Ayurvedic kwatha maker featuring a 200+ recipe catalog, recipe details, sensor fill & check, and decoction result.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

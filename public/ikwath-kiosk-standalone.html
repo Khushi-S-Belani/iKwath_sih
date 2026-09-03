@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>iKwath — Device UI (1280×800)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F6F8;
+    --panel:#FFFFFF;
+    --panel-2:#F2F1F4;
+    --line: rgba(30,30,30,0.08);
+    --line-strong: rgba(30,30,30,0.14);
+    --cream:#282C3F;
+    --muted:#6B7280;
+    --sage:#60B246;
+    --sage-dim: rgba(96,178,70,0.12);
+    --amber:#FC8019;
+    --amber-light:#FF9F45;
+    --amber-dim: rgba(252,128,25,0.12);
+    --alert:#E1462C;
+    --alert-dim: rgba(225,70,44,0.10);
+    --radius: 20px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{ background:#EDEDF0; height:100%; }
+  body{
+    font-family:'DM Sans', sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh;
+  }
+  .bezel{
+    width:1328px; padding:24px;
+    background: linear-gradient(155deg,#1c1c1f,#0e0e10);
+    border-radius:34px;
+    box-shadow: 0 40px 90px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .device{
+    width:1280px; height:800px;
+    background: var(--bg);
+    border-radius:18px;
+    overflow:hidden;
+    position:relative;
+    color:var(--cream);
+    display:flex;
+  }
+
+  /* ---------- Left rail ---------- */
+  .rail{
+    width:228px; flex-shrink:0;
+    background: #FFFFFF;
+    border-right:1px solid var(--line);
+    padding:28px 22px;
+    display:flex; flex-direction:column;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; margin-bottom:40px; }
+  .brand-mark{
+    width:36px; height:36px; border-radius:12px;
+    background: linear-gradient(135deg, var(--amber-light), var(--amber));
+    position:relative; flex-shrink:0;
+    box-shadow: 0 6px 14px rgba(252,128,25,0.35);
+  }
+  .brand-mark::after{
+    content:""; position:absolute; inset:9px;
+    border-radius:7px; background:#FFFFFF;
+  }
+  .brand-name{ font-family:'Poppins', sans-serif; font-size:19px; font-weight:700; letter-spacing:0.1px;}
+  .brand-sub{ font-size:10.5px; color:var(--muted); margin-top:1px; font-weight:500;}
+
+  .steps{ display:flex; flex-direction:column; gap:2px; }
+  .step{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 8px; border-radius:12px; cursor:pointer;
+    position:relative;
+  }
+  .step:not(:last-child)::before{
+    content:""; position:absolute; left:23px; top:38px; bottom:-6px;
+    width:1.5px; background:var(--line-strong);
+  }
+  .step-dot{
+    width:26px; height:26px; border-radius:50%;
+    border:1.5px solid var(--line-strong);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Poppins', sans-serif; font-weight:600; font-size:11px; color:var(--muted);
+    flex-shrink:0; background:#FFFFFF; z-index:1;
+    transition: all .2s ease;
+  }
+  .step-label{ font-size:13.5px; color:var(--muted); font-weight:600; transition: color .2s ease;}
+  .step.done .step-dot{ background:var(--sage); border-color:var(--sage); color:#fff; }
+  .step.active .step-dot{ background:var(--amber); border-color:var(--amber); color:#fff; box-shadow:0 4px 10px rgba(252,128,25,0.4); }
+  .step.active .step-label{ color:var(--cream); }
+  .step.done .step-label{ color:var(--cream); }
+
+  .rail-foot{ margin-top:auto; padding-top:20px; border-top:1px solid var(--line); }
+  .rail-foot-title{ font-size:10.5px; color:var(--muted); letter-spacing:0.3px; margin-bottom:8px; font-weight:600;}
+  .pill-status{
+    display:flex; align-items:center; gap:8px;
+    font-size:12.5px; color:var(--cream); font-weight:600;
+  }
+  .dot-live{ width:7px; height:7px; border-radius:50%; background:var(--sage); box-shadow:0 0 0 4px var(--sage-dim); }
+
+  /* ---------- Main area ---------- */
+  .main{ flex:1; padding:30px 36px 26px; display:flex; flex-direction:column; min-width:0; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; min-height:44px; }
+  .screen-title{ font-family:'Poppins', sans-serif; font-size:27px; font-weight:700; line-height:1.15; }
+  .screen-sub{ font-size:13px; color:var(--muted); margin-top:4px; font-weight:500;}
+  .topbar-right{ text-align:right; flex-shrink:0; padding-left:24px; }
+  .clock{ font-family:'Poppins', sans-serif; font-size:13px; color:var(--muted); font-weight:600;}
+
+  .screen{ display:none; flex:1; min-height:0; flex-direction:column; }
+  .screen.show{ display:flex; }
+
+  /* button */
+  .btn{
+    font-family:'DM Sans', sans-serif; font-weight:700; font-size:15px;
+    border:none; border-radius:14px; cursor:pointer;
+    padding:16px 26px; letter-spacing:0.1px;
+    display:inline-flex; align-items:center; gap:10px;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{ background: var(--amber); color:#fff; box-shadow:0 8px 18px rgba(252,128,25,0.32); }
+  .btn-primary:hover{ filter:brightness(1.05); }
+  .btn-ghost{ background:#FFFFFF; color:var(--cream); border:1.5px solid var(--line-strong); }
+  .btn-ghost:hover{ filter:brightness(0.98); }
+  .btn[disabled]{ opacity:0.35; pointer-events:none; }
+
+  /* ---------- shared bits ---------- */
+  .card{
+    background: var(--panel);
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding:22px;
+    box-sizing:border-box;
+    box-shadow: 0 2px 14px rgba(40,44,63,0.06);
+  }
+  .row-check{ display:flex; align-items:center; gap:10px; font-size:14px; font-weight:500; }
+  .check-ico{ width:18px; height:18px; flex-shrink:0; }
+  .check-ico circle{ fill:var(--sage-dim); }
+  .check-ico path{ stroke:var(--sage); }
+  .mono{ font-family:'Poppins', sans-serif; font-weight:600; }
+  .num-unit{ display:inline-flex; align-items:baseline; gap:5px; }
+
+  /* ===== Screen 1: Setup ===== */
+  #screen-setup .grid{
+    display:grid; grid-template-columns: 1.15fr 1fr; gap:22px; flex:1; min-height:0;
+  }
+  .formula-card{ display:flex; flex-direction:column; }
+  .formula-name{ font-family:'Poppins', sans-serif; font-size:32px; font-weight:700; margin:10px 0 4px; }
+  .formula-note{ font-size:13px; color:var(--muted); max-width:380px; line-height:1.55; font-weight:500;}
+  .chips{ display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
+  .chip{
+    padding:9px 16px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer;
+    border:1.5px solid var(--line-strong); color:var(--muted); background:#FFFFFF;
+  }
+  .chip.sel{ background:var(--amber-dim); border-color:var(--amber); color:var(--amber); font-weight:700; }
+  .label-eyebrow{ font-size:11.5px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.4px;}
+
+  .side-stack{ display:flex; flex-direction:column; gap:16px; height:100%; }
+  .water-card{ flex-shrink:0; }
+  .water-row{ display:flex; align-items:center; gap:16px; }
+  .water-glass{ width:46px; height:58px; flex-shrink:0; }
+  .water-fig{ font-family:'Poppins', sans-serif; font-size:24px; font-weight:700; line-height:1.2; }
+  .water-fig .unit{ display:block; font-family:'DM Sans', sans-serif; font-size:12.5px; color:var(--muted); font-weight:500; margin-top:3px; }
+
+  .checklist{ display:flex; flex-direction:column; justify-content:center; gap:16px; flex:1; }
+
+  .setup-foot{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:22px; padding-top:22px; border-top:1px solid var(--line);
+  }
+  .ready-msg{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--sage); font-weight:700;}
+
+  /* ===== Screen 2: Brewing ===== */
+  #screen-brew .grid{
+    display:grid; grid-template-columns: 1fr 1.2fr; gap:22px; flex:1; min-height:0;
+  }
+  .gauge-wrap{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge-num{ font-family:'Poppins', sans-serif; font-size:48px; font-weight:700; }
+  .gauge-lbl{ font-size:12.5px; color:var(--muted); margin-top:2px; font-weight:600;}
+  .gauge-target{ font-size:11.5px; color:var(--muted); margin-top:14px; font-weight:500;}
+
+  .stat-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  .stat{ padding:18px 18px; }
+  .stat-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .stat-name{ font-size:12.5px; color:var(--muted); font-weight:600;}
+  .stat-val{ font-family:'Poppins', sans-serif; font-size:20px; font-weight:700; }
+  .stat-badge{ font-size:10.5px; padding:3px 10px; border-radius:999px; font-weight:700; letter-spacing:.3px; }
+  .badge-on{ background:var(--sage-dim); color:var(--sage); }
+  .badge-off{ background:var(--panel-2); color:var(--muted); }
+
+  .stage-rail{ display:flex; align-items:center; margin-top:18px; }
+  .stage-item{ flex:1; display:flex; flex-direction:column; align-items:center; position:relative; }
+  .stage-item::before{
+    content:""; position:absolute; top:12px; left:-50%; width:100%; height:1.5px;
+    background:var(--line-strong); z-index:0;
+  }
+  .stage-item:first-child::before{ display:none; }
+  .stage-item.done::before{ background:var(--sage); }
+  .stage-dot2{
+    width:24px; height:24px; border-radius:50%; z-index:1;
+    background:var(--panel-2); border:1.5px solid var(--line-strong);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Poppins', sans-serif; font-weight:700; font-size:10px; color:var(--muted);
+  }
+  .stage-item.done .stage-dot2{ background:var(--sage); border-color:var(--sage); color:#fff; }
+  .stage-item.now .stage-dot2{ background:var(--amber); border-color:var(--amber); color:#fff; box-shadow:0 0 0 5px var(--amber-dim); }
+  .stage-name{ font-size:12px; color:var(--muted); margin-top:9px; font-weight:600;}
+  .stage-item.done .stage-name, .stage-item.now .stage-name{ color:var(--cream); }
+
+  /* ===== Screen 3: Reduction ===== */
+  #screen-reduce .grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:22px; flex:1; min-height:0;
+  }
+  .flask-panel{ display:flex; align-items:center; justify-content:center; gap:34px; }
+  .flask-outer{ width:150px; height:280px; position:relative; }
+  .flask-glass{
+    position:absolute; inset:0; border-radius:16px;
+    border:2px solid var(--line-strong);
+    background:var(--panel-2); overflow:hidden;
+  }
+  .flask-liquid{
+    position:absolute; left:0; right:0; bottom:0; height:39%;
+    background: linear-gradient(180deg, var(--amber-light), var(--amber) 60%, #82430f);
+    transition: height 1.2s ease;
+  }
+  .flask-liquid::before{
+    content:""; position:absolute; top:-6px; left:0; right:0; height:12px;
+    background: repeating-linear-gradient(90deg, var(--amber-light) 0 10px, var(--amber) 10px 20px);
+    opacity:.6; border-radius:50%;
+  }
+  .flask-target-line{ position:absolute; left:-10px; right:-10px; bottom:25%; border-top:1.5px dashed var(--sage); }
+  .flask-target-lbl{ position:absolute; right:-56px; bottom:calc(25% - 7px); font-size:10.5px; color:var(--sage); font-family:'Poppins',sans-serif; font-weight:700;}
+  .flask-figs{ display:flex; flex-direction:column; gap:16px; }
+  .fig-block .fig-lbl{ font-size:11.5px; color:var(--muted); font-weight:600;}
+  .fig-block .fig-num{ font-family:'Poppins', sans-serif; font-size:22px; font-weight:700; margin-top:2px;}
+
+  .ring-wrap{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ring{ position:relative; width:168px; height:168px; }
+  .ring svg{ transform:rotate(-90deg); }
+  .ring-pct{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .ring-pct .n{ font-family:'Poppins', sans-serif; font-size:30px; font-weight:700; }
+  .ring-pct .l{ font-size:10.5px; color:var(--muted); margin-top:2px; font-weight:600;}
+  .ring-check-list{ display:flex; flex-direction:column; gap:10px; margin-top:22px; width:100%; }
+  .ring-check-row{ display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:500; padding:0 6px; }
+  .footnote{ font-size:11px; color:var(--muted); line-height:1.5; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); font-weight:500;}
+
+  /* ===== Screen 4: Result ===== */
+  #screen-result .grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:22px; flex:1; min-height:0;
+  }
+  .result-hero{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .result-check{ width:56px; height:56px; margin-bottom:14px;}
+  .result-title{ font-family:'Poppins', sans-serif; font-size:24px; font-weight:700; }
+  .result-num{ font-family:'Poppins', sans-serif; font-size:60px; font-weight:800; margin:10px 0 4px; color:var(--amber); }
+  .result-temp{ font-size:13px; color:var(--muted); margin-bottom:24px; font-weight:600;}
+
+  .clean-list{ display:flex; flex-direction:column; gap:16px; }
+  .clean-row{
+    display:flex; align-items:center; gap:12px; padding:13px 14px;
+    border-radius:12px; background:var(--panel-2); border:1px solid var(--line);
+  }
+  .clean-row.done{ opacity:0.55; }
+  .clean-row .txt{ font-size:13.5px; flex:1; font-weight:600;}
+  .clean-row .step-tag{ font-size:10.5px; color:var(--muted); font-weight:700;}
+
+  /* nav arrows */
+  .navctl{ position:absolute; bottom:26px; right:36px; display:flex; gap:10px; }
+  .arrow-btn{
+    width:44px; height:44px; border-radius:12px; border:1.5px solid var(--line-strong);
+    background:#FFFFFF; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .arrow-btn:hover{ filter:brightness(0.97); }
+  .arrow-btn svg{ width:16px; height:16px; stroke:var(--cream); }
+</style>
+</head>
+<body>
+
+<div class="bezel">
+  <div class="device">
+
+    <!-- LEFT RAIL -->
+    <div class="rail">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-name">iKwath</div>
+          <div class="brand-sub">Smart Kwatha Maker</div>
+        </div>
+      </div>
+
+      <div class="steps" id="steps">
+        <div class="step active" data-target="0">
+          <div class="step-dot">1</div>
+          <div class="step-label">Setup</div>
+        </div>
+        <div class="step" data-target="1">
+          <div class="step-dot">2</div>
+          <div class="step-label">Brewing</div>
+        </div>
+        <div class="step" data-target="2">
+          <div class="step-dot">3</div>
+          <div class="step-label">Reduction</div>
+        </div>
+        <div class="step" data-target="3">
+          <div class="step-dot">4</div>
+          <div class="step-label">Result</div>
+        </div>
+      </div>
+
+      <div class="rail-foot">
+        <div class="rail-foot-title">Chamber</div>
+        <div class="pill-status"><span class="dot-live"></span> Locked · 88 °C</div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <!-- ===== SCREEN 1 : SETUP ===== -->
+      <div class="screen show" id="screen-setup">
+        <div class="topbar">
+          <div>
+            <div class="screen-title">Choose your kwatha</div>
+            <div class="screen-sub">Insert the matching pod, then confirm the checks below.</div>
+          </div>
+          <div class="topbar-right"><div class="clock mono">09:14</div></div>
+        </div>
+
+        <div class="grid">
+          <div class="card formula-card">
+            <div class="label-eyebrow">Selected formulation</div>
+            <div class="formula-name">Triphala Kwatha</div>
+            <div class="formula-note">Classical tridosha decoction. Prepared per AFI monograph — 400 mL water, reduced to 100 mL over a controlled 85–90 °C boil.</div>
+
+            <div class="chips">
+              <div class="chip sel">Triphala</div>
+              <div class="chip">Dashmool</div>
+              <div class="chip">Ashwagandha</div>
+              <div class="chip">Guduchi</div>
+            </div>
+
+            <div style="margin-top:auto; padding-top:22px;">
+              <div class="row-check">
+                <svg class="check-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6 10l2.5 2.5L14 7" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Pod detected — Triphala, batch TR-0942
+              </div>
+            </div>
+          </div>
+
+          <div class="side-stack">
+            <div class="card water-card">
+              <div class="label-eyebrow">Water required</div>
+              <div class="water-row" style="margin-top:12px;">
+                <svg class="water-glass" viewBox="0 0 46 58">
+                  <path d="M8 4 H38 L33 40 Q23 54 13 40 Z" fill="none" stroke="var(--line-strong)" stroke-width="2"/>
+                  <path d="M11.5 26 L34.5 26 L33 40 Q23 52 13 40 Z" fill="var(--amber)" opacity="0.85"/>
+                </svg>
+                <div class="water-fig">400 mL<span class="unit">Potable water, API Jala grade</span></div>
+              </div>
+            </div>
+
+            <div class="card checklist">
+              <div class="label-eyebrow">Pre-brew checks</div>
+              <div class="row-check"><svg class="check-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6 10l2.5 2.5L14 7" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Water added — 400 mL</div>
+              <div class="row-check"><svg class="check-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6 10l2.5 2.5L14 7" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Pod inserted correctly</div>
+              <div class="row-check"><svg class="check-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6 10l2.5 2.5L14 7" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Chamber locked</div>
+              <div class="row-check"><svg class="check-ico" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9"/><path d="M6 10l2.5 2.5L14 7" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Dry-run sensor clear</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-foot">
+          <div class="ready-msg"><span class="dot-live"></span> All checks passed — ready to brew</div>
+          <button class="btn btn-primary" onclick="goTo(1)">Start brewing →</button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 2 : BREWING ===== -->
+      <div class="screen" id="screen-brew">
+        <div class="topbar">
+          <div>
+            <div class="screen-title">Brewing — Triphala Kwatha</div>
+            <div class="screen-sub">Extraction in progress · gentle boil, controlled temperature</div>
+          </div>
+          <div class="topbar-right"><div class="clock mono">Elapsed 08:32</div></div>
+        </div>
+
+        <div class="grid">
+          <div class="card gauge-wrap">
+            <svg width="190" height="190" viewBox="0 0 190 190">
+              <circle cx="95" cy="95" r="80" fill="none" stroke="var(--line)" stroke-width="12"/>
+              <circle cx="95" cy="95" r="80" fill="none" stroke="var(--amber)" stroke-width="12"
+                stroke-linecap="round" stroke-dasharray="502" stroke-dashoffset="90"
+                transform="rotate(-90 95 95)"/>
+            </svg>
+            <div class="gauge-num num-unit">88.2<span style="font-size:22px;">°C</span></div>
+            <div class="gauge-lbl">Chamber temperature</div>
+            <div class="gauge-target">Target range 85–90 °C</div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:16px; height:100%;">
+            <div class="stat-grid" style="flex-shrink:0;">
+              <div class="card stat">
+                <div class="stat-top"><span class="stat-name">Heating element</span><span class="stat-badge badge-on">ON</span></div>
+                <div class="stat-val">Steady</div>
+              </div>
+              <div class="card stat">
+                <div class="stat-top"><span class="stat-name">Stirring</span><span class="stat-badge badge-on">ON</span></div>
+                <div class="stat-val">40 rpm</div>
+              </div>
+              <div class="card stat">
+                <div class="stat-top"><span class="stat-name">Vacuum assist</span><span class="stat-badge badge-on">ON</span></div>
+                <div class="stat-val">−20 kPa</div>
+              </div>
+              <div class="card stat">
+                <div class="stat-top"><span class="stat-name">Time remaining</span><span class="stat-badge badge-off">EST</span></div>
+                <div class="stat-val">≈ 11 min</div>
+              </div>
+            </div>
+
+            <div class="card" style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+              <div class="label-eyebrow" style="margin-bottom:16px;">Process stage</div>
+              <div class="stage-rail" style="margin-top:0;">
+                <div class="stage-item done"><div class="stage-dot2">✓</div><div class="stage-name">Soaking</div></div>
+                <div class="stage-item now"><div class="stage-dot2">2</div><div class="stage-name">Extraction</div></div>
+                <div class="stage-item"><div class="stage-dot2">3</div><div class="stage-name">Reduction</div></div>
+                <div class="stage-item"><div class="stage-dot2">4</div><div class="stage-name">Filtering</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-foot">
+          <button class="btn btn-ghost">⏸ Pause</button>
+          <button class="btn btn-primary" onclick="goTo(2)">Continue to reduction →</button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 3 : REDUCTION ===== -->
+      <div class="screen" id="screen-reduce">
+        <div class="topbar">
+          <div>
+            <div class="screen-title">Reduction &amp; quality</div>
+            <div class="screen-sub">Reducing to one-fourth volume per AFI specification</div>
+          </div>
+          <div class="topbar-right"><div class="clock mono">78% complete</div></div>
+        </div>
+
+        <div class="grid">
+          <div class="card flask-panel">
+            <div class="flask-outer">
+              <div class="flask-glass">
+                <div class="flask-liquid" style="height:39%;"></div>
+                <div class="flask-target-line"></div>
+                <div class="flask-target-lbl">100 mL</div>
+              </div>
+            </div>
+            <div class="flask-figs">
+              <div class="fig-block"><div class="fig-lbl">Initial volume</div><div class="fig-num">400 mL</div></div>
+              <div class="fig-block"><div class="fig-lbl">Current volume</div><div class="fig-num" style="color:var(--amber-light);">156 mL</div></div>
+              <div class="fig-block"><div class="fig-lbl">Target</div><div class="fig-num">100 mL</div></div>
+            </div>
+          </div>
+
+          <div class="card ring-wrap">
+            <div class="ring">
+              <svg width="168" height="168" viewBox="0 0 168 168">
+                <circle cx="84" cy="84" r="72" fill="none" stroke="var(--line)" stroke-width="11"/>
+                <circle cx="84" cy="84" r="72" fill="none" stroke="var(--sage)" stroke-width="11"
+                  stroke-linecap="round" stroke-dasharray="452" stroke-dashoffset="18"
+                  transform="rotate(-90 84 84)"/>
+              </svg>
+              <div class="ring-pct"><div class="n">96%</div><div class="l">Process consistency</div></div>
+            </div>
+
+            <div class="ring-check-list">
+              <div class="ring-check-row"><span>Temperature held in range</span> <span style="color:var(--sage);">✓</span></div>
+              <div class="ring-check-row"><span>Reduction rate on curve</span> <span style="color:var(--sage);">✓</span></div>
+              <div class="ring-check-row"><span>Extraction time on target</span> <span style="color:var(--sage);">✓</span></div>
+              <div class="ring-check-row"><span>Water proportion (AFI)</span> <span style="color:var(--sage);">✓</span></div>
+            </div>
+
+            <div class="footnote">Consistency score reflects adherence to the AFI process parameters for this batch. It is not a substitute for laboratory verification of the constituent profile.</div>
+          </div>
+        </div>
+
+        <div class="setup-foot">
+          <button class="btn btn-ghost" onclick="goTo(1)">← Back</button>
+          <button class="btn btn-primary" onclick="goTo(3)">Continue to filtering →</button>
+        </div>
+      </div>
+
+      <!-- ===== SCREEN 4 : RESULT ===== -->
+      <div class="screen" id="screen-result">
+        <div class="topbar">
+          <div>
+            <div class="screen-title">Kwatha ready</div>
+            <div class="screen-sub">Filtered, dispensed warm, and ready to drink</div>
+          </div>
+          <div class="topbar-right"><div class="clock mono">Cycle time 21:40</div></div>
+        </div>
+
+        <div class="grid">
+          <div class="card result-hero">
+            <svg class="result-check" viewBox="0 0 56 56"><circle cx="28" cy="28" r="27" fill="var(--sage-dim)" stroke="var(--sage)" stroke-width="1.5"/><path d="M17 29l7 7 15-15" fill="none" stroke="var(--sage)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="result-title">Triphala Kwatha</div>
+            <div class="result-num num-unit">100<span style="font-size:26px;">mL</span></div>
+            <div class="result-temp">Served at 62 °C · consistency score 96%</div>
+            <button class="btn btn-primary">Dispense</button>
+          </div>
+
+          <div class="card" style="display:flex; flex-direction:column; height:100%;">
+            <div class="label-eyebrow" style="margin-bottom:16px;">After use</div>
+            <div class="clean-list" style="flex:1; justify-content:center;">
+              <div class="clean-row done"><div class="txt">Remove spent pod</div><div class="step-tag mono">done</div></div>
+              <div class="clean-row done"><div class="txt">Remove boiling chamber</div><div class="step-tag mono">done</div></div>
+              <div class="clean-row"><div class="txt">Start rinse cycle</div><div class="step-tag mono">next</div></div>
+              <div class="clean-row"><div class="txt">Chamber &amp; filter — dishwasher safe</div><div class="step-tag mono">optional</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setup-foot">
+          <button class="btn btn-ghost" onclick="goTo(0)">Prepare another dose</button>
+          <button class="btn btn-ghost">Start rinse cycle →</button>
+        </div>
+      </div>
+
+      <div class="navctl">
+        <div class="arrow-btn" onclick="step(-1)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cream)" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="arrow-btn" onclick="step(1)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cream)" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const screens = ['screen-setup','screen-brew','screen-reduce','screen-result'];
+  let current = 0;
+
+  function goTo(i){
+    current = i;
+    screens.forEach((id, idx) => {
+      document.getElementById(id).classList.toggle('show', idx === i);
+    });
+    document.querySelectorAll('.step').forEach((el, idx) => {
+      el.classList.toggle('active', idx === i);
+      el.classList.toggle('done', idx < i);
+    });
+  }
+  function step(dir){
+    let next = current + dir;
+    if(next < 0) next = 0;
+    if(next > 3) next = 3;
+    goTo(next);
+  }
+  document.querySelectorAll('.step').forEach(el=>{
+    el.addEventListener('click', ()=> goTo(parseInt(el.dataset.target)));
+  });
+  document.querySelectorAll('.chip').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('sel'));
+      el.classList.add('sel');
+    });
+  });
+</script>
+
+</body>
+</html>
