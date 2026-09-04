@@ -5,36 +5,87 @@ interface Screen3SensorCheckProps {
   recipe: KwathaRecipe;
   onProceed: () => void;
   onBack: () => void;
+  onStatusChange?: (passed: boolean) => void;
 }
 
 export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
   recipe,
   onProceed,
   onBack,
+  onStatusChange,
 }) => {
   // Required water target from selected recipe (fallback to classical 400 mL if per AFI monograph)
   const targetWaterMl =
     typeof recipe.waterQuantityMl === 'number' ? recipe.waterQuantityMl : 400;
 
-  // Sensor states driven by selected recipe
-  const [isPodDetected, setIsPodDetected] = useState(true);
-  const [detectedWaterMl, setDetectedWaterMl] = useState<number>(targetWaterMl);
-  const [isChamberLocked, setIsChamberLocked] = useState(true);
+  // Sensor states start unverified — user must complete all checks before proceeding
+  const [isPodDetected, setIsPodDetected] = useState(false);
+  const [detectedWaterMl, setDetectedWaterMl] = useState<number>(0);
+  const [isChamberLocked, setIsChamberLocked] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
 
-  // Update detected water when recipe changes
+  // Reset sensor states when recipe changes
   useEffect(() => {
-    const target = typeof recipe.waterQuantityMl === 'number' ? recipe.waterQuantityMl : 400;
-    setDetectedWaterMl(target);
-    setIsPodDetected(true);
-    setIsChamberLocked(true);
-  }, [recipe]);
+    setIsPodDetected(false);
+    setDetectedWaterMl(0);
+    setIsChamberLocked(false);
+    setIsAutoFilling(false);
+  }, [recipe.id]);
 
   // Check conditions - auto-ticks when thresholds are met
   const isWaterReady = detectedWaterMl >= targetWaterMl;
   const allChecksPassed = isPodDetected && isWaterReady && isChamberLocked;
 
+  // Notify parent container of sensor check status
+  useEffect(() => {
+    onStatusChange?.(allChecksPassed);
+  }, [allChecksPassed, onStatusChange]);
+
   const fillPercentage = Math.min(100, Math.round((detectedWaterMl / targetWaterMl) * 100));
+
+  // Active brew & reduction process state
+  const [isBrewing, setIsBrewing] = useState(false);
+  const [brewProgress, setBrewProgress] = useState(0);
+  const [brewStage, setBrewStage] = useState('Chamber sealed · Rapid heating to 88°C PID setpoint...');
+  const [currentVolumeMl, setCurrentVolumeMl] = useState(400);
+
+  const handleStartBrewing = () => {
+    if (!allChecksPassed) return;
+    setIsBrewing(true);
+    setBrewProgress(0);
+
+    const stages = [
+      { at: 0, msg: 'Chamber sealed · Rapid heating to 88°C PID setpoint...', vol: 400 },
+      { at: 25, msg: 'Active decoction · Extracting water-soluble botanical constituents...', vol: 320 },
+      { at: 55, msg: 'Standard simmer & reduction · Concentrating to 1/4th classical target...', vol: 200 },
+      { at: 80, msg: 'Final reduction reached · 100 mL target volume verified...', vol: 100 },
+      { at: 96, msg: 'Clarification & thermal stabilization · Ready to dispense...', vol: 100 },
+    ];
+
+    const duration = 3400; // 3.4 seconds smooth process
+    const intervalTime = 50;
+    const totalSteps = duration / intervalTime;
+    let currentStep = 0;
+
+    const timer = setInterval(() => {
+      currentStep++;
+      const pct = Math.min(100, Math.round((currentStep / totalSteps) * 100));
+      setBrewProgress(pct);
+
+      const stage = [...stages].reverse().find((s) => pct >= s.at);
+      if (stage) {
+        setBrewStage(stage.msg);
+        setCurrentVolumeMl(stage.vol);
+      }
+
+      if (currentStep >= totalSteps) {
+        clearInterval(timer);
+        setTimeout(() => {
+          onProceed();
+        }, 300);
+      }
+    }, intervalTime);
+  };
 
   // Simulation handler to demonstrate live sensor fill
   const handleSimulateFill = () => {
@@ -56,7 +107,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
         clearInterval(interval);
         setIsAutoFilling(false);
       }
-    }, 60);
+    }, 45);
   };
 
   return (
@@ -65,18 +116,218 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
       id="screen-sensor"
       style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
     >
-      {/* Main Content: 2 Columns */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1.1fr 1fr',
-          gap: '20px',
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {/* Left Column: Required vs. Sensor-Detected Water Quantity & Fill Meter */}
+      {isBrewing ? (
         <div
+          className="card"
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            padding: '26px 30px',
+            minHeight: 0,
+          }}
+        >
+          {/* Header */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  color: 'var(--cream)',
+                }}
+              >
+                Decoction & Reduction in Progress
+              </div>
+              <span
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: 'var(--amber)',
+                  background: 'var(--amber-dim)',
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                }}
+              >
+                Active Cycle · {recipe.afiCode}
+              </span>
+            </div>
+            <div style={{ fontSize: '12.5px', color: 'var(--muted)' }}>
+              Extracting and concentrating {recipe.name} per classical Ayurvedic Formulary monograph protocol
+            </div>
+          </div>
+
+          {/* Central Live Telemetry Dashboard */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '16px',
+              margin: '16px 0',
+            }}
+          >
+            {/* Chamber Temperature */}
+            <div
+              style={{
+                padding: '16px 18px',
+                borderRadius: '14px',
+                background: '#F9F8F5',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Chamber Temperature
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: '26px',
+                  fontWeight: 700,
+                  color: 'var(--amber)',
+                  marginTop: '4px',
+                }}
+              >
+                88.2°C
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--sage)', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="dot-live" /> PID Thermal Simmer Active
+              </div>
+            </div>
+
+            {/* Volume Reduction */}
+            <div
+              style={{
+                padding: '16px 18px',
+                borderRadius: '14px',
+                background: '#F9F8F5',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Volume Reduction
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: '26px',
+                  fontWeight: 700,
+                  color: 'var(--cream)',
+                  marginTop: '4px',
+                }}
+              >
+                {currentVolumeMl} <span style={{ fontSize: '15px', fontWeight: 500 }}>mL</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+                Concentrating 400 mL → 100 mL target
+              </div>
+            </div>
+
+            {/* Botanical Input */}
+            <div
+              style={{
+                padding: '16px 18px',
+                borderRadius: '14px',
+                background: '#F9F8F5',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Botanical Charge
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: '26px',
+                  fontWeight: 700,
+                  color: 'var(--cream)',
+                  marginTop: '4px',
+                }}
+              >
+                ~{recipe.yavakutaCurana.length * 3} <span style={{ fontSize: '15px', fontWeight: 500 }}>g</span>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+                {recipe.yavakutaCurana.length} herbs at 10–14 mesh
+              </div>
+            </div>
+          </div>
+
+          {/* Active Process Progress Bar & Stage description */}
+          <div
+            style={{
+              padding: '18px 22px',
+              borderRadius: '14px',
+              background: '#FFFDF9',
+              border: '1.5px solid var(--amber-dim)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--cream)' }}>
+                {brewStage}
+              </span>
+              <span
+                style={{
+                  fontFamily: "'Poppins', sans-serif",
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  color: 'var(--amber)',
+                }}
+              >
+                {brewProgress}%
+              </span>
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '14px',
+                borderRadius: '999px',
+                background: '#ECEAE4',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${brewProgress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--amber), #FF9E42)',
+                  borderRadius: '999px',
+                  transition: 'width 0.08s linear',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Footer Controls for Brewing State */}
+          <div className="setup-foot" style={{ marginTop: '16px', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--muted)', fontSize: '12.5px' }}>
+              <span className="dot-live" style={{ background: 'var(--amber)' }} />
+              Chamber hermetically locked during thermal reduction
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => onProceed()}
+              style={{ fontSize: '13px' }}
+            >
+              Skip to Result →
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Main Content: 2 Columns */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1.1fr 1fr',
+              gap: '20px',
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            {/* Left Column: Required vs. Sensor-Detected Water Quantity & Fill Meter */}
+            <div
           className="card"
           style={{
             display: 'flex',
@@ -120,7 +371,11 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   borderRadius: '999px',
                 }}
               >
-                {isAutoFilling ? 'Filling...' : '↺ Re-test Fill'}
+                {isAutoFilling
+                  ? 'Filling...'
+                  : isWaterReady
+                  ? '↺ Re-test Fill'
+                  : '⚡ Auto-Fill Chamber'}
               </button>
             </div>
 
@@ -276,17 +531,62 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
           <div>
             <div
               style={{
-                fontFamily: "'Poppins', sans-serif",
-                fontSize: '17px',
-                fontWeight: 700,
-                color: 'var(--cream)',
-                marginBottom: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
               }}
             >
-              Chamber Sensor Checklist
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '18px' }}>
-              Confirming ingredients and physical thresholds for {recipe.name}
+              <div>
+                <div
+                  style={{
+                    fontFamily: "'Poppins', sans-serif",
+                    fontSize: '17px',
+                    fontWeight: 700,
+                    color: 'var(--cream)',
+                  }}
+                >
+                  Chamber Sensor Checklist
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                  Confirming ingredients and physical thresholds for {recipe.name}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: allChecksPassed ? 'var(--sage)' : 'var(--amber)',
+                    background: allChecksPassed ? '#EDF7EE' : 'var(--amber-dim)',
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {[isPodDetected, isWaterReady, isChamberLocked].filter(Boolean).length}/3 confirmed
+                </span>
+                {!allChecksPassed && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setIsPodDetected(true);
+                      setDetectedWaterMl(targetWaterMl);
+                      setIsChamberLocked(true);
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      borderRadius: '999px',
+                      height: 'auto',
+                    }}
+                  >
+                    Verify All
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Checklist Items: Auto-ticks as thresholds are met */}
@@ -306,51 +606,68 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                {/* Label — left side */}
+                <div>
                   <div
                     style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: isPodDetected ? 'var(--sage)' : '#FFF',
-                      border: `1.5px solid ${isPodDetected ? 'var(--sage)' : 'var(--line-strong)'}`,
+                      fontFamily: "'Poppins', sans-serif",
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: 'var(--cream)',
+                    }}
+                  >
+                    Botanical Pod Loaded
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
+                    {isPodDetected
+                      ? `Confirmed ${recipe.coarsePowderDose || '~25 g'} coarse powder (${recipe.yavakutaCurana.length} herbs) for ${recipe.name}`
+                      : 'Insert coarse herbal pod into chamber'}
+                  </div>
+                </div>
+                {/* Checkbox + status — right side, grouped */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Tap target wrapper — 24×24 min, visual box 20×20 */}
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#FFF',
-                      fontWeight: 700,
-                      fontSize: '12px',
+                      flexShrink: 0,
                     }}
                   >
-                    {isPodDetected ? '✓' : ''}
-                  </div>
-                  <div>
                     <div
                       style={{
-                        fontFamily: "'Poppins', sans-serif",
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: 'var(--cream)',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '6px',
+                        background: isPodDetected ? 'var(--sage)' : 'transparent',
+                        border: `1.5px solid ${isPodDetected ? 'var(--sage)' : 'var(--line-strong)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        transition: 'background 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: isPodDetected ? 'scale(1)' : 'scale(0.88)',
                       }}
                     >
-                      Botanical Pod Loaded
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {isPodDetected
-                        ? `Confirmed ${recipe.coarsePowderDose || '~25 g'} coarse powder (${recipe.yavakutaCurana.length} herbs) for ${recipe.name}`
-                        : 'Insert coarse herbal pod into chamber'}
+                      {isPodDetected ? '✓' : ''}
                     </div>
                   </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: isPodDetected ? 'var(--sage)' : 'var(--amber)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isPodDetected ? 'PASSED' : 'TAP TO LOAD'}
+                  </span>
                 </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: isPodDetected ? 'var(--sage)' : 'var(--amber)',
-                  }}
-                >
-                  {isPodDetected ? 'PASSED' : 'TAP TO LOAD'}
-                </span>
               </div>
 
               {/* Checklist 2: Water at required mL */}
@@ -370,51 +687,68 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                {/* Label — left side */}
+                <div>
                   <div
                     style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: isWaterReady ? 'var(--sage)' : '#FFF',
-                      border: `1.5px solid ${isWaterReady ? 'var(--sage)' : 'var(--line-strong)'}`,
+                      fontFamily: "'Poppins', sans-serif",
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: 'var(--cream)',
+                    }}
+                  >
+                    Water at Required Volume
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
+                    {isWaterReady
+                      ? `${detectedWaterMl} mL filled (Threshold met: ${targetWaterMl} mL)`
+                      : `Current: ${detectedWaterMl} mL (Requires ${targetWaterMl} mL)`}
+                  </div>
+                </div>
+                {/* Checkbox + status — right side, grouped */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Tap target wrapper — 24×24 min, visual box 20×20 */}
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#FFF',
-                      fontWeight: 700,
-                      fontSize: '12px',
+                      flexShrink: 0,
                     }}
                   >
-                    {isWaterReady ? '✓' : ''}
-                  </div>
-                  <div>
                     <div
                       style={{
-                        fontFamily: "'Poppins', sans-serif",
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: 'var(--cream)',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '6px',
+                        background: isWaterReady ? 'var(--sage)' : 'transparent',
+                        border: `1.5px solid ${isWaterReady ? 'var(--sage)' : 'var(--line-strong)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        transition: 'background 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: isWaterReady ? 'scale(1)' : 'scale(0.88)',
                       }}
                     >
-                      Water at Required Volume
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {isWaterReady
-                        ? `${detectedWaterMl} mL filled (Threshold met: ${targetWaterMl} mL)`
-                        : `Current: ${detectedWaterMl} mL (Requires ${targetWaterMl} mL)`}
+                      {isWaterReady ? '✓' : ''}
                     </div>
                   </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: isWaterReady ? 'var(--sage)' : 'var(--amber)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isWaterReady ? 'PASSED' : 'TAP TO FILL'}
+                  </span>
                 </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: isWaterReady ? 'var(--sage)' : 'var(--amber)',
-                  }}
-                >
-                  {isWaterReady ? 'PASSED' : 'TAP TO FILL'}
-                </span>
               </div>
 
               {/* Checklist 3: Chamber locked */}
@@ -432,51 +766,68 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   transition: 'all 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                {/* Label — left side */}
+                <div>
                   <div
                     style={{
-                      width: '26px',
-                      height: '26px',
-                      borderRadius: '50%',
-                      background: isChamberLocked ? 'var(--sage)' : '#FFF',
-                      border: `1.5px solid ${isChamberLocked ? 'var(--sage)' : 'var(--line-strong)'}`,
+                      fontFamily: "'Poppins', sans-serif",
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: 'var(--cream)',
+                    }}
+                  >
+                    Chamber Sealed & Temperature
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
+                    {isChamberLocked
+                      ? `Hermetic lock engaged · Regulated to ${recipe.boilTempRange}`
+                      : 'Chamber unsealed'}
+                  </div>
+                </div>
+                {/* Checkbox + status — right side, grouped */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Tap target wrapper — 24×24 min, visual box 20×20 */}
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#FFF',
-                      fontWeight: 700,
-                      fontSize: '12px',
+                      flexShrink: 0,
                     }}
                   >
-                    {isChamberLocked ? '✓' : ''}
-                  </div>
-                  <div>
                     <div
                       style={{
-                        fontFamily: "'Poppins', sans-serif",
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: 'var(--cream)',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '6px',
+                        background: isChamberLocked ? 'var(--sage)' : 'transparent',
+                        border: `1.5px solid ${isChamberLocked ? 'var(--sage)' : 'var(--line-strong)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#FFF',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        transition: 'background 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transform: isChamberLocked ? 'scale(1)' : 'scale(0.88)',
                       }}
                     >
-                      Chamber Sealed & Temperature
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {isChamberLocked
-                        ? `Hermetic lock engaged · Regulated to ${recipe.boilTempRange}`
-                        : 'Chamber unsealed'}
+                      {isChamberLocked ? '✓' : ''}
                     </div>
                   </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: isChamberLocked ? 'var(--sage)' : 'var(--amber)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isChamberLocked ? 'PASSED' : 'TAP TO LOCK'}
+                  </span>
                 </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: isChamberLocked ? 'var(--sage)' : 'var(--amber)',
-                  }}
-                >
-                  {isChamberLocked ? 'PASSED' : 'TAP TO LOCK'}
-                </span>
               </div>
             </div>
           </div>
@@ -494,7 +845,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
             }}
           >
             {allChecksPassed
-              ? '✓ All sensor thresholds confirmed. Primary button enabled.'
+              ? '✓ All sensor checks passed. Ready to initiate decoction.'
               : 'Waiting for all 3 sensor checks to pass before brewing can be initiated.'}
           </div>
         </div>
@@ -508,16 +859,19 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
         <button
           type="button"
           className="btn btn-primary"
-          onClick={onProceed}
+          onClick={handleStartBrewing}
           disabled={!allChecksPassed}
           style={{
             opacity: allChecksPassed ? 1 : 0.35,
             cursor: allChecksPassed ? 'pointer' : 'not-allowed',
+            pointerEvents: allChecksPassed ? 'auto' : 'none',
           }}
         >
           Start Brewing →
         </button>
       </div>
+    </>
+      )}
     </div>
   );
 };

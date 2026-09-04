@@ -9,8 +9,11 @@ import { KwathaRecipe } from './types';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<number>(0);
-  const [selectedRecipe, setSelectedRecipe] = useState<KwathaRecipe>(KWATHA_RECIPES[0]);
+  const [selectedRecipe, setSelectedRecipe] = useState<KwathaRecipe | null>(KWATHA_RECIPES[0]);
   const [currentTime, setCurrentTime] = useState<string>('09:14');
+  const [meridiem, setMeridiem] = useState<string>('AM');
+  const [is24Hour, setIs24Hour] = useState<boolean>(false);
+  const [sensorChecksPassed, setSensorChecksPassed] = useState<boolean>(false);
 
   // Scaling logic to make the 1328px hardware bezel fit gracefully in any window/iframe
   const [scale, setScale] = useState<number>(1);
@@ -20,14 +23,24 @@ export default function App() {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
+      const rawHours = now.getHours();
       const mins = String(now.getMinutes()).padStart(2, '0');
-      setCurrentTime(`${hours}:${mins}`);
+      const ampm = rawHours >= 12 ? 'PM' : 'AM';
+      const hours12 = String(rawHours % 12 || 12).padStart(2, '0');
+      const hours24 = String(rawHours).padStart(2, '0');
+
+      setCurrentTime(is24Hour ? `${hours24}:${mins}` : `${hours12}:${mins}`);
+      setMeridiem(ampm);
     };
     updateTime();
-    const interval = setInterval(updateTime, 30000);
+    const interval = setInterval(updateTime, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [is24Hour]);
+
+  // Reset sensor verification when recipe changes
+  useEffect(() => {
+    setSensorChecksPassed(false);
+  }, [selectedRecipe?.id]);
 
   // Compute scale for container
   useEffect(() => {
@@ -50,9 +63,12 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Step navigation helper (Nav arrows)
+  // Step navigation helper (Nav arrows) — strictly guards advancing past Screen 3 without sensor verification
   const handleStep = (direction: number) => {
     setCurrentScreen((prev) => {
+      if (direction > 0 && prev === 2 && !sensorChecksPassed) {
+        return prev;
+      }
       const next = prev + direction;
       return Math.min(3, Math.max(0, next));
     });
@@ -64,12 +80,13 @@ export default function App() {
       if (e.key === 'ArrowLeft') {
         handleStep(-1);
       } else if (e.key === 'ArrowRight') {
+        if (currentScreen === 2 && !sensorChecksPassed) return;
         handleStep(1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [currentScreen, sensorChecksPassed]);
 
   // Dynamic titles for each screen
   const screenMeta = [
@@ -118,7 +135,12 @@ export default function App() {
             {/* LEFT RAIL (4 Steps: Recipes → Details → Sensor Check → Result) */}
             <DeviceRail
               currentScreen={currentScreen}
-              onSelectScreen={(screenIdx) => setCurrentScreen(screenIdx)}
+              onSelectScreen={(screenIdx) => {
+                if (screenIdx === 3 && !sensorChecksPassed) {
+                  return;
+                }
+                setCurrentScreen(screenIdx);
+              }}
               chamberTemp={
                 currentScreen === 0
                   ? '88 °C'
@@ -161,7 +183,7 @@ export default function App() {
                       type="button"
                       className="arrow-btn"
                       onClick={() => handleStep(1)}
-                      disabled={currentScreen === 3}
+                      disabled={currentScreen === 3 || (currentScreen === 2 && !sensorChecksPassed)}
                       aria-label="Next screen"
                     >
                       <svg
@@ -174,7 +196,32 @@ export default function App() {
                       </svg>
                     </button>
                   </div>
-                  <div className="clock mono">{currentTime}</div>
+
+                  {/* Time Bar Capsule */}
+                  <div
+                    className="time-bar-capsule"
+                    onClick={() => setIs24Hour((prev) => !prev)}
+                    title="Click to toggle 12h / 24h format"
+                    role="timer"
+                    aria-label={`Current time: ${currentTime} ${is24Hour ? '' : meridiem}`}
+                  >
+                    <span className="time-live-dot" aria-hidden="true" />
+                    <svg
+                      className="time-clock-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span className="time-digits">{currentTime}</span>
+                    {!is24Hour && <span className="time-meridiem">{meridiem}</span>}
+                  </div>
                 </div>
               </div>
 
@@ -194,7 +241,7 @@ export default function App() {
               {/* SCREEN 2: Recipe Detail */}
               {currentScreen === 1 && (
                 <Screen2Details
-                  recipe={selectedRecipe}
+                  recipe={selectedRecipe || KWATHA_RECIPES[0]}
                   onBrew={() => setCurrentScreen(2)}
                   onBack={() => setCurrentScreen(0)}
                 />
@@ -203,17 +250,21 @@ export default function App() {
               {/* SCREEN 3: Sensor Fill & Check */}
               {currentScreen === 2 && (
                 <Screen3SensorCheck
-                  recipe={selectedRecipe}
+                  recipe={selectedRecipe || KWATHA_RECIPES[0]}
                   onProceed={() => setCurrentScreen(3)}
                   onBack={() => setCurrentScreen(1)}
+                  onStatusChange={(passed) => setSensorChecksPassed(passed)}
                 />
               )}
 
               {/* SCREEN 4: Result */}
               {currentScreen === 3 && (
                 <Screen4Result
-                  recipe={selectedRecipe}
-                  onPrepareAnother={() => setCurrentScreen(0)}
+                  recipe={selectedRecipe || KWATHA_RECIPES[0]}
+                  onPrepareAnother={() => {
+                    setSelectedRecipe(null);
+                    setCurrentScreen(0);
+                  }}
                 />
               )}
             </main>

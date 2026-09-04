@@ -4,7 +4,7 @@ import { RECIPE_CATEGORIES, RecipeCategory } from '../data/recipes';
 
 interface Screen1CatalogProps {
   recipes: KwathaRecipe[];
-  selectedRecipe: KwathaRecipe;
+  selectedRecipe: KwathaRecipe | null;
   onSelectRecipe: (recipe: KwathaRecipe) => void;
   onOpenRecipe: (recipe: KwathaRecipe) => void;
 }
@@ -285,13 +285,27 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
         <div className="ready-msg">
           <span className="dot-live"></span>
           <span style={{ fontSize: '13px' }}>
-            {filteredRecipes.length} formulations available · Selected: <strong>{selectedRecipe.name}</strong> ({selectedRecipe.afiCode})
+            {selectedRecipe ? (
+              <>
+                {filteredRecipes.length} formulations available · Selected: <strong>{selectedRecipe.name}</strong> ({selectedRecipe.afiCode})
+              </>
+            ) : (
+              <>
+                {filteredRecipes.length} formulations available · Tap a card to select formulation
+              </>
+            )}
           </span>
         </div>
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => onOpenRecipe(selectedRecipe)}
+          onClick={() => selectedRecipe && onOpenRecipe(selectedRecipe)}
+          disabled={!selectedRecipe}
+          style={{
+            opacity: selectedRecipe ? 1 : 0.35,
+            cursor: selectedRecipe ? 'pointer' : 'not-allowed',
+            pointerEvents: selectedRecipe ? 'auto' : 'none',
+          }}
         >
           View Recipe Details →
         </button>

@@ -274,7 +274,7 @@ html, body {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 12px;
   flex-shrink: 0;
   margin: 0;
   padding: 0;
@@ -326,18 +326,85 @@ html, body {
   display: block;
 }
 
-.clock {
+/* ---------- Attractive Hardware Time Bar Capsule ---------- */
+.time-bar-capsule {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 0 10px;
+  background: #FFFFFF;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.time-bar-capsule:hover {
+  border-color: var(--amber);
+  box-shadow: 0 2px 8px rgba(196, 130, 63, 0.12);
+  transform: translateY(-0.5px);
+}
+
+.time-bar-capsule:active {
+  transform: translateY(0.5px);
+}
+
+.time-live-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: var(--sage);
+  box-shadow: 0 0 0 3px var(--sage-dim);
+  display: inline-block;
+  flex-shrink: 0;
+  animation: pulse-live 2.4s infinite ease-in-out;
+}
+
+@keyframes pulse-live {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--sage-dim);
+    opacity: 0.9;
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(74, 124, 89, 0.22);
+    opacity: 1;
+  }
+}
+
+.time-clock-icon {
+  width: 14px;
+  height: 14px;
+  stroke: var(--cream);
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.time-digits {
   font-family: 'Poppins', sans-serif;
   font-size: 13.5px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 700;
+  color: var(--cream);
+  letter-spacing: 0.6px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  margin: 0;
-  padding: 0;
-  letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-  user-select: none;
+}
+
+.time-meridiem {
+  font-family: 'Poppins', sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--amber);
+  background: var(--amber-dim);
+  padding: 2.5px 6px;
+  border-radius: 5px;
+  line-height: 1;
+  letter-spacing: 0.4px;
 }
 
 .screen {
