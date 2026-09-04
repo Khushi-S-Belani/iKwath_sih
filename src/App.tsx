@@ -14,7 +14,6 @@ export default function App() {
 
   // Scaling logic to make the 1328px hardware bezel fit gracefully in any window/iframe
   const [scale, setScale] = useState<number>(1);
-  const [autoScale, setAutoScale] = useState<boolean>(true);
   const outerWrapRef = useRef<HTMLDivElement>(null);
 
   // Update clock
@@ -33,10 +32,6 @@ export default function App() {
   // Compute scale for container
   useEffect(() => {
     const handleResize = () => {
-      if (!autoScale) {
-        setScale(1);
-        return;
-      }
       const paddingX = 32;
       const paddingY = 32;
       const targetW = 1328 + paddingX;
@@ -53,7 +48,7 @@ export default function App() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [autoScale]);
+  }, []);
 
   // Step navigation helper (Nav arrows)
   const handleStep = (direction: number) => {
@@ -136,39 +131,28 @@ export default function App() {
 
             {/* MAIN CONTENT AREA */}
             <main className="main">
-              {/* TOPBAR (Unified header with title, subtitle, topbar nav arrows, and clock) */}
+              {/* TOPBAR (Unified header row in normal flex flow with left title block, grouped nav arrows, and flush clock) */}
               <div className="topbar">
-                <div>
+                <div className="topbar-left">
                   <div className="screen-title">{screenMeta[currentScreen].title}</div>
                   <div className="screen-sub">{screenMeta[currentScreen].sub}</div>
                 </div>
 
-                {/* Topbar Right: Navigation Arrows + Clock (Never intersects footer buttons) */}
-                <div
-                  className="topbar-right"
-                  style={{ display: 'flex', alignItems: 'center', gap: '14px' }}
-                >
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                {/* Topbar Right: Navigation Arrows + Clock in normal flex flow */}
+                <div className="topbar-right">
+                  <div className="nav-arrows-group">
                     <button
                       type="button"
                       className="arrow-btn"
                       onClick={() => handleStep(-1)}
                       disabled={currentScreen === 0}
                       aria-label="Previous screen"
-                      style={{
-                        width: '38px',
-                        height: '38px',
-                        borderRadius: '10px',
-                        opacity: currentScreen === 0 ? 0.35 : 1,
-                        cursor: currentScreen === 0 ? 'not-allowed' : 'pointer',
-                      }}
                     >
                       <svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--cream)"
+                        stroke="currentColor"
                         strokeWidth="2"
-                        style={{ width: '16px', height: '16px' }}
                       >
                         <path d="M15 18l-6-6 6-6" />
                       </svg>
@@ -179,20 +163,12 @@ export default function App() {
                       onClick={() => handleStep(1)}
                       disabled={currentScreen === 3}
                       aria-label="Next screen"
-                      style={{
-                        width: '38px',
-                        height: '38px',
-                        borderRadius: '10px',
-                        opacity: currentScreen === 3 ? 0.35 : 1,
-                        cursor: currentScreen === 3 ? 'not-allowed' : 'pointer',
-                      }}
                     >
                       <svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--cream)"
+                        stroke="currentColor"
                         strokeWidth="2"
-                        style={{ width: '16px', height: '16px' }}
                       >
                         <path d="M9 18l6-6-6-6" />
                       </svg>
@@ -245,47 +221,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Subtle zoom / scale control bar */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 14,
-          right: 14,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          background: 'rgba(28, 28, 31, 0.85)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: 8,
-          padding: '4px 10px',
-          zIndex: 100,
-          color: '#E0E0E6',
-          fontSize: 12,
-          fontFamily: "'DM Sans', sans-serif",
-          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-        }}
-      >
-        <span style={{ color: '#9E9EA8', fontWeight: 500 }}>
-          {autoScale ? `Fit (${Math.round(scale * 100)}%)` : '100% 1:1'}
-        </span>
-        <button
-          type="button"
-          onClick={() => setAutoScale((prev) => !prev)}
-          style={{
-            background: autoScale ? 'rgba(252, 128, 25, 0.2)' : 'rgba(255,255,255,0.1)',
-            border: autoScale ? '1px solid #FC8019' : '1px solid rgba(255,255,255,0.15)',
-            color: autoScale ? '#FF9F45' : '#FFFFFF',
-            borderRadius: 5,
-            padding: '3px 8px',
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          {autoScale ? 'Auto-Fit' : '1:1 Scale'}
-        </button>
-      </div>
     </div>
   );
 }

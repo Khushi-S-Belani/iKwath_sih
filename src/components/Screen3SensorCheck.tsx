@@ -12,25 +12,29 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
   onProceed,
   onBack,
 }) => {
+  // Required water target from selected recipe (fallback to classical 400 mL if per AFI monograph)
+  const targetWaterMl =
+    typeof recipe.waterQuantityMl === 'number' ? recipe.waterQuantityMl : 400;
+
   // Sensor states driven by selected recipe
   const [isPodDetected, setIsPodDetected] = useState(true);
-  const [detectedWaterMl, setDetectedWaterMl] = useState<number>(recipe.waterQuantityMl);
+  const [detectedWaterMl, setDetectedWaterMl] = useState<number>(targetWaterMl);
   const [isChamberLocked, setIsChamberLocked] = useState(true);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
 
-  // Update detected water if recipe changes
+  // Update detected water when recipe changes
   useEffect(() => {
-    setDetectedWaterMl(recipe.waterQuantityMl);
+    const target = typeof recipe.waterQuantityMl === 'number' ? recipe.waterQuantityMl : 400;
+    setDetectedWaterMl(target);
     setIsPodDetected(true);
     setIsChamberLocked(true);
   }, [recipe]);
 
-  // Check conditions
-  const requiredWater = recipe.waterQuantityMl;
-  const isWaterReady = detectedWaterMl >= requiredWater;
+  // Check conditions - auto-ticks when thresholds are met
+  const isWaterReady = detectedWaterMl >= targetWaterMl;
   const allChecksPassed = isPodDetected && isWaterReady && isChamberLocked;
 
-  const fillPercentage = Math.min(100, Math.round((detectedWaterMl / requiredWater) * 100));
+  const fillPercentage = Math.min(100, Math.round((detectedWaterMl / targetWaterMl) * 100));
 
   // Simulation handler to demonstrate live sensor fill
   const handleSimulateFill = () => {
@@ -39,7 +43,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
     setIsAutoFilling(true);
 
     const start = 0;
-    const end = requiredWater;
+    const end = targetWaterMl;
     const steps = 20;
     let step = 0;
 
@@ -102,7 +106,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   Water Load Sensor
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                  Load-cell weight & optical volume transducer
+                  Calibrated for {recipe.name} ({recipe.afiCode})
                 </div>
               </div>
               <button
@@ -120,7 +124,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
               </button>
             </div>
 
-            {/* Required vs Detected Stats */}
+            {/* Required vs Detected Stats from selected recipe */}
             <div
               style={{
                 display: 'grid',
@@ -138,21 +142,28 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                 }}
               >
                 <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
-                  Required Quantity
+                  Required Water Volume
                 </div>
                 <div
                   style={{
                     fontFamily: "'Poppins', sans-serif",
-                    fontSize: '26px',
+                    fontSize: typeof recipe.waterQuantityMl === 'number' ? '26px' : '20px',
                     fontWeight: 700,
                     color: 'var(--cream)',
                     marginTop: '4px',
                   }}
                 >
-                  {requiredWater} <span style={{ fontSize: '14px', fontWeight: 500 }}>mL</span>
+                  {typeof recipe.waterQuantityMl === 'number' ? (
+                    <>
+                      {recipe.waterQuantityMl}{' '}
+                      <span style={{ fontSize: '14px', fontWeight: 500 }}>mL</span>
+                    </>
+                  ) : (
+                    recipe.waterQuantityMl
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                  AFI Recipe Specification
+                  AFI Monograph Target
                 </div>
               </div>
 
@@ -165,7 +176,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                 }}
               >
                 <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
-                  Sensor-Detected
+                  Transducer Reading
                 </div>
                 <div
                   style={{
@@ -202,9 +213,9 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                   marginBottom: '8px',
                 }}
               >
-                <span style={{ color: 'var(--muted)' }}>Fill Progress Indicator</span>
+                <span style={{ color: 'var(--muted)' }}>Fill Progress Meter</span>
                 <span style={{ color: isWaterReady ? 'var(--sage)' : 'var(--amber)' }}>
-                  {fillPercentage}% ({detectedWaterMl}/{requiredWater} mL)
+                  {fillPercentage}% ({detectedWaterMl}/{targetWaterMl} mL)
                 </span>
               </div>
               <div
@@ -243,9 +254,11 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
               justifyContent: 'space-between',
             }}
           >
-            <span>Target Reduction:</span>
+            <span>Target Reduction Volume:</span>
             <span style={{ fontWeight: 700, color: 'var(--cream)' }}>
-              {recipe.reductionTargetMl} mL (1/4 volume extraction)
+              {typeof recipe.reductionTargetMl === 'number'
+                ? `${recipe.reductionTargetMl} mL (1/4 decoction)`
+                : recipe.reductionTargetMl}
             </span>
           </div>
         </div>
@@ -270,15 +283,15 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                 marginBottom: '4px',
               }}
             >
-              Chamber Pre-Flight Checklist
+              Chamber Sensor Checklist
             </div>
             <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '18px' }}>
-              All 3 sensor thresholds must be satisfied to unlock extraction
+              Confirming ingredients and physical thresholds for {recipe.name}
             </div>
 
-            {/* Checklist Items */}
+            {/* Checklist Items: Auto-ticks as thresholds are met */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Checklist 1: Pod Detected */}
+              {/* Checklist 1: Pod / Herb Detected */}
               <div
                 onClick={() => setIsPodDetected((prev) => !prev)}
                 style={{
@@ -320,10 +333,12 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                         color: 'var(--cream)',
                       }}
                     >
-                      Pod Detected
+                      Botanical Pod Loaded
                     </div>
                     <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {isPodDetected ? `RFID Matched: ${recipe.name}` : 'Insert herb pod into tray'}
+                      {isPodDetected
+                        ? `Confirmed ${recipe.coarsePowderDose || '~25 g'} coarse powder (${recipe.yavakutaCurana.length} herbs) for ${recipe.name}`
+                        : 'Insert coarse herbal pod into chamber'}
                     </div>
                   </div>
                 </div>
@@ -334,14 +349,14 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                     color: isPodDetected ? 'var(--sage)' : 'var(--amber)',
                   }}
                 >
-                  {isPodDetected ? 'PASSED' : 'TAP TO DETECT'}
+                  {isPodDetected ? 'PASSED' : 'TAP TO LOAD'}
                 </span>
               </div>
 
               {/* Checklist 2: Water at required mL */}
               <div
                 onClick={() =>
-                  setDetectedWaterMl((prev) => (prev >= requiredWater ? 0 : requiredWater))
+                  setDetectedWaterMl((prev) => (prev >= targetWaterMl ? 0 : targetWaterMl))
                 }
                 style={{
                   display: 'flex',
@@ -382,12 +397,12 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                         color: 'var(--cream)',
                       }}
                     >
-                      Water at Required mL
+                      Water at Required Volume
                     </div>
                     <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
                       {isWaterReady
-                        ? `${detectedWaterMl} mL loaded (Exact requirement: ${requiredWater} mL)`
-                        : `Current: ${detectedWaterMl} mL (Requires ${requiredWater} mL)`}
+                        ? `${detectedWaterMl} mL filled (Threshold met: ${targetWaterMl} mL)`
+                        : `Current: ${detectedWaterMl} mL (Requires ${targetWaterMl} mL)`}
                     </div>
                   </div>
                 </div>
@@ -444,10 +459,12 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
                         color: 'var(--cream)',
                       }}
                     >
-                      Chamber Locked
+                      Chamber Sealed & Temperature
                     </div>
                     <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {isChamberLocked ? 'Hermetic pneumatic clamp engaged' : 'Chamber unsealed'}
+                      {isChamberLocked
+                        ? `Hermetic lock engaged · Regulated to ${recipe.boilTempRange}`
+                        : 'Chamber unsealed'}
                     </div>
                   </div>
                 </div>
@@ -464,6 +481,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
             </div>
           </div>
 
+          {/* Status summary */}
           <div
             style={{
               padding: '12px 14px',
@@ -476,13 +494,13 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
             }}
           >
             {allChecksPassed
-              ? '✓ All sensor thresholds confirmed. Ready to start extraction.'
-              : 'Waiting for all sensor checks to pass before brewing can start.'}
+              ? '✓ All sensor thresholds confirmed. Primary button enabled.'
+              : 'Waiting for all 3 sensor checks to pass before brewing can be initiated.'}
           </div>
         </div>
       </div>
 
-      {/* Screen 3 Footer: Back on left, Exactly one primary orange button on bottom-right */}
+      {/* Screen 3 Footer: Back on left, Exactly ONE primary orange button on bottom-right */}
       <div className="setup-foot" style={{ marginTop: '16px', paddingTop: '16px' }}>
         <button type="button" className="btn btn-ghost" onClick={onBack}>
           ← Back to Details
@@ -493,7 +511,7 @@ export const Screen3SensorCheck: React.FC<Screen3SensorCheckProps> = ({
           onClick={onProceed}
           disabled={!allChecksPassed}
           style={{
-            opacity: allChecksPassed ? 1 : 0.45,
+            opacity: allChecksPassed ? 1 : 0.35,
             cursor: allChecksPassed ? 'pointer' : 'not-allowed',
           }}
         >

@@ -20,6 +20,18 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
     }, 2400);
   };
 
+  const formatFinalVolume = () => {
+    if (typeof recipe.reductionTargetMl === 'number') {
+      return (
+        <>
+          {recipe.reductionTargetMl}{' '}
+          <span style={{ fontSize: '16px', fontWeight: 500 }}>mL</span>
+        </>
+      );
+    }
+    return <span style={{ fontSize: '18px' }}>{recipe.reductionTargetMl}</span>;
+  };
+
   return (
     <div
       className="screen show"
@@ -30,13 +42,13 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1.05fr 1fr',
           gap: '20px',
           flex: 1,
           minHeight: 0,
         }}
       >
-        {/* Left Column: Formulation Summary Card */}
+        {/* Left Column: Formulation Summary & Monograph Details */}
         <div
           className="card"
           style={{
@@ -58,8 +70,8 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
               <span
                 style={{
                   fontFamily: "'Poppins', sans-serif",
-                  fontSize: '11.5px',
-                  fontWeight: 600,
+                  fontSize: '11px',
+                  fontWeight: 700,
                   color: 'var(--muted)',
                   letterSpacing: '0.4px',
                 }}
@@ -80,14 +92,15 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
               </span>
             </div>
 
+            {/* Recipe Name and AFI Code brewed against */}
             <div
               style={{
                 fontFamily: "'Poppins', sans-serif",
-                fontSize: '24px',
+                fontSize: '23px',
                 fontWeight: 700,
                 color: 'var(--cream)',
-                marginBottom: '6px',
-                lineHeight: 1.2,
+                marginBottom: '4px',
+                lineHeight: 1.25,
               }}
             >
               {recipe.name}
@@ -95,13 +108,13 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
 
             <div
               style={{
-                fontSize: '13px',
-                fontWeight: 600,
-                color: 'var(--muted)',
+                fontSize: '13.5px',
+                fontWeight: 700,
+                color: 'var(--amber)',
                 marginBottom: '20px',
               }}
             >
-              Classical Code: {recipe.afiCode}
+              AFI Code: {recipe.afiCode}
             </div>
 
             {/* Extraction Quality Highlights */}
@@ -119,25 +132,27 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
                 <span style={{ color: 'var(--muted)' }}>Botanical Input</span>
                 <span style={{ fontWeight: 600, color: 'var(--cream)' }}>
-                  {recipe.yavakutaCurana.length} herbs (Yavakuṭa Cūrṇa)
+                  {recipe.yavakutaCurana.length} herbs · {recipe.coarsePowderDose || '~25 g (per monograph)'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
-                <span style={{ color: 'var(--muted)' }}>Initial Water Volume</span>
+                <span style={{ color: 'var(--muted)' }}>Initial Water Charge</span>
                 <span style={{ fontWeight: 600, color: 'var(--cream)' }}>
-                  {recipe.waterQuantityMl} mL
+                  {typeof recipe.waterQuantityMl === 'number'
+                    ? `${recipe.waterQuantityMl} mL`
+                    : recipe.waterQuantityMl}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
-                <span style={{ color: 'var(--muted)' }}>Extraction Method</span>
+                <span style={{ color: 'var(--muted)' }}>Extraction Temperature</span>
                 <span style={{ fontWeight: 600, color: 'var(--cream)' }}>
-                  Controlled Boil ({recipe.boilTempRange})
+                  {recipe.boilTempRange} (Controlled simmer)
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
-                <span style={{ color: 'var(--muted)' }}>Extraction Yield</span>
+                <span style={{ color: 'var(--muted)' }}>Standard Reduction</span>
                 <span style={{ fontWeight: 700, color: 'var(--amber)' }}>
-                  1/4 Classical Reduction Target Met
+                  Exact 1/4th Classical Decoction Target
                 </span>
               </div>
             </div>
@@ -157,7 +172,7 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
           >
             <span className="dot-live"></span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sage)' }}>
-              Chamber thermal equilibrium locked · Ready to pour
+              Extraction complete · Monograph standards verified
             </span>
           </div>
         </div>
@@ -184,11 +199,11 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
             >
               Batch Telemetry
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '18px' }}>
-              Final parameters calibrated for therapeutic potency
+            <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '16px' }}>
+              Final parameters calibrated for therapeutic administration
             </div>
 
-            {/* 3 Main Result Metrics */}
+            {/* 3 Main Result Metrics required: Final Volume, Serve Temperature, Process Consistency Score */}
             <div
               style={{
                 display: 'grid',
@@ -210,7 +225,7 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.3px' }}>
                     FINAL VOLUME
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
@@ -225,8 +240,7 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
                     color: 'var(--amber)',
                   }}
                 >
-                  {recipe.reductionTargetMl}{' '}
-                  <span style={{ fontSize: '15px', fontWeight: 500 }}>mL</span>
+                  {formatFinalVolume()}
                 </div>
               </div>
 
@@ -243,11 +257,11 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.3px' }}>
                     SERVE TEMPERATURE
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                    Optimal bio-availability warmth
+                    Optimal bioavailability warmth
                   </div>
                 </div>
                 <div
@@ -275,11 +289,11 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>
+                  <div style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.3px' }}>
                     PROCESS CONSISTENCY SCORE
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                    Thermal stability & density match
+                    Thermal stability & active extraction
                   </div>
                 </div>
                 <div
@@ -332,14 +346,14 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
                   ? 'Dispense Complete'
                   : dispenseState === 'dispensing'
                   ? 'Dispensing in Progress...'
-                  : 'Place Cup Under Nozzle'}
+                  : 'Ready for Dispensing'}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '2px' }}>
                 {dispenseState === 'done'
-                  ? 'Cup ready to retrieve. Enjoy your freshly extracted kwatha.'
+                  ? 'Decoction dispensed into cup. Ready for consumption.'
                   : dispenseState === 'dispensing'
-                  ? `Delivering ${recipe.reductionTargetMl} mL at ${recipe.servingTemp}...`
-                  : 'Ensure cup volume is at least 150 mL.'}
+                  ? `Delivering ${recipe.name} at ${recipe.servingTemp}...`
+                  : 'Place cup under dispenser spout and tap Dispense.'}
               </div>
             </div>
             {dispenseState === 'dispensing' && (
@@ -352,7 +366,7 @@ export const Screen4Result: React.FC<Screen4ResultProps> = ({
         </div>
       </div>
 
-      {/* Screen 4 Footer: Secondary on left, Single primary action on bottom-right */}
+      {/* Screen 4 Footer: Prepare another dose (secondary, returns to Screen 1) on left, Dispense (primary) on bottom-right */}
       <div className="setup-foot" style={{ marginTop: '16px', paddingTop: '16px' }}>
         <button type="button" className="btn btn-ghost" onClick={onPrepareAnother}>
           Prepare another dose

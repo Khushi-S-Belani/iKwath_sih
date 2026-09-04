@@ -5,10 +5,11 @@ export interface KwathaRecipe {
   category: string;
   afiCode: string;
   yavakutaCurana: string[];
-  waterQuantityMl: number;
-  reductionTargetMl: number;
+  coarsePowderDose?: string;
+  waterQuantityMl: number | string;
+  reductionTargetMl: number | string;
   boilTempRange: string;
-  prepTimeMin: number;
+  prepTimeMin: number | string;
   servingTemp: string;
   consistencyScore: number;
 }

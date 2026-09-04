@@ -18,21 +18,26 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
   const [activeCategory, setActiveCategory] = useState<RecipeCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Live filter as user types by recipe name or AFI code
   const filteredRecipes = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return recipes.filter((r) => {
       const matchesCategory =
         activeCategory === 'All' || r.category.toLowerCase() === activeCategory.toLowerCase();
-      const query = searchQuery.trim().toLowerCase();
       const matchesSearch =
         !query ||
         r.name.toLowerCase().includes(query) ||
-        r.tag.toLowerCase().includes(query) ||
-        r.afiCode.toLowerCase().includes(query);
+        r.afiCode.toLowerCase().includes(query) ||
+        r.tag.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
   }, [recipes, activeCategory, searchQuery]);
 
   const handleCardClick = (recipe: KwathaRecipe) => {
+    onSelectRecipe(recipe);
+  };
+
+  const handleCardDoubleClick = (recipe: KwathaRecipe) => {
     onSelectRecipe(recipe);
     onOpenRecipe(recipe);
   };
@@ -43,33 +48,26 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
       id="screen-catalog"
       style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
     >
-      {/* Filter and Search Bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '14px',
-          marginBottom: '16px',
-          flexShrink: 0,
-        }}
-      >
-        {/* Search input */}
-        <div style={{ position: 'relative', width: '310px', flexShrink: 0 }}>
+      {/* PINNED TOP SECTION: Search Bar pinned at top */}
+      <div style={{ flexShrink: 0, marginBottom: '16px' }}>
+        {/* Search bar pinned at top of grid */}
+        <div style={{ position: 'relative', width: '100%', marginBottom: '12px' }}>
           <input
             type="text"
-            placeholder="Search by name, tag, or AFI code..."
+            placeholder="Search classical formulation by name or AFI code (e.g. 4:1, Guduchyadi, Asmarihara)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: '100%',
-              padding: '11px 16px 11px 38px',
-              borderRadius: '999px',
+              padding: '12px 18px 12px 42px',
+              borderRadius: '12px',
               border: '1.5px solid var(--line-strong)',
               background: '#FFFFFF',
               fontFamily: "'DM Sans', sans-serif",
-              fontSize: '13px',
+              fontSize: '14px',
               color: 'var(--cream)',
               outline: 'none',
+              boxShadow: '0 2px 8px rgba(40, 44, 63, 0.04)',
               transition: 'border-color 0.15s ease',
             }}
           />
@@ -80,11 +78,11 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
             strokeWidth="2"
             style={{
               position: 'absolute',
-              left: '14px',
+              left: '16px',
               top: '50%',
               transform: 'translateY(-50%)',
-              width: '15px',
-              height: '15px',
+              width: '16px',
+              height: '16px',
               pointerEvents: 'none',
             }}
           >
@@ -97,23 +95,25 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
               onClick={() => setSearchQuery('')}
               style={{
                 position: 'absolute',
-                right: '12px',
+                right: '14px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 background: 'none',
                 border: 'none',
                 color: 'var(--muted)',
-                fontSize: '12px',
+                fontSize: '13px',
                 cursor: 'pointer',
                 fontWeight: 700,
+                padding: '4px 8px',
               }}
+              aria-label="Clear search query"
             >
               ✕
             </button>
           )}
         </div>
 
-        {/* Category chips scrollable */}
+        {/* Category filter chips stay BELOW the search bar */}
         <div
           className="chips"
           style={{
@@ -123,7 +123,6 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
             overflowX: 'auto',
             paddingBottom: '2px',
             scrollbarWidth: 'none',
-            flex: 1,
           }}
         >
           {RECIPE_CATEGORIES.map((cat) => (
@@ -132,7 +131,12 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
               type="button"
               className={`chip ${activeCategory === cat ? 'sel' : ''}`}
               onClick={() => setActiveCategory(cat)}
-              style={{ whiteSpace: 'nowrap', padding: '8px 14px', fontSize: '12.5px' }}
+              style={{
+                whiteSpace: 'nowrap',
+                padding: '8px 14px',
+                fontSize: '12.5px',
+                borderRadius: '999px',
+              }}
             >
               {cat}
             </button>
@@ -140,7 +144,7 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
         </div>
       </div>
 
-      {/* Recipe Grid - Scrollable (Only recipe name, short tag, AFI code) */}
+      {/* Grid of recipe cards below, each showing: formulation name, AFI class code, and one indication tag */}
       <div
         style={{
           flex: 1,
@@ -157,16 +161,16 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '60px 20px',
+              padding: '50px 20px',
               textAlign: 'center',
               color: 'var(--muted)',
             }}
           >
             <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: '18px', fontWeight: 600 }}>
-              No formulations found
+              No monographs found
             </div>
             <div style={{ fontSize: '13px', marginTop: '6px' }}>
-              Try searching with another keyword or select the "All" category.
+              No formulation matches "{searchQuery}". Try searching by AFI code (e.g. 4:1) or herb name.
             </div>
             <button
               type="button"
@@ -185,7 +189,7 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '16px',
+              gap: '14px',
             }}
           >
             {filteredRecipes.map((recipe) => {
@@ -195,64 +199,75 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
                   key={recipe.id}
                   className="card"
                   onClick={() => handleCardClick(recipe)}
+                  onDoubleClick={() => handleCardDoubleClick(recipe)}
                   style={{
                     cursor: 'pointer',
-                    padding: '18px 20px',
+                    padding: '16px 18px',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    minHeight: '112px',
+                    minHeight: '110px',
+                    borderRadius: '16px',
                     transition: 'all 0.15s ease',
                     border: isSelected
-                      ? '1.5px solid var(--amber)'
+                      ? '2px solid var(--amber)'
                       : '1px solid var(--line)',
                     backgroundColor: isSelected ? '#FFFAF5' : 'var(--panel)',
                     boxShadow: isSelected
                       ? '0 6px 18px rgba(252, 128, 25, 0.16)'
-                      : '0 2px 14px rgba(40, 44, 63, 0.04)',
+                      : '0 2px 10px rgba(40, 44, 63, 0.04)',
                   }}
                 >
-                  {/* Top row: AFI Code & Tag */}
+                  {/* Top row: AFI Class Code & Single Indication Tag */}
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      marginBottom: '10px',
+                      marginBottom: '8px',
+                      gap: '8px',
                     }}
                   >
+                    {/* AFI class code */}
                     <span
                       style={{
                         fontFamily: "'Poppins', sans-serif",
                         fontSize: '11px',
-                        fontWeight: 600,
-                        color: 'var(--muted)',
-                        letterSpacing: '0.4px',
+                        fontWeight: 700,
+                        color: isSelected ? 'var(--amber)' : 'var(--muted)',
+                        letterSpacing: '0.3px',
                       }}
                     >
                       {recipe.afiCode}
                     </span>
+
+                    {/* One indication tag */}
                     <span
                       style={{
-                        fontSize: '11px',
+                        fontSize: '10.5px',
                         fontWeight: 600,
                         color: 'var(--amber)',
                         background: 'var(--amber-dim)',
-                        padding: '3px 9px',
+                        padding: '3px 8px',
                         borderRadius: '999px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '170px',
                       }}
+                      title={recipe.tag}
                     >
                       {recipe.tag}
                     </span>
                   </div>
 
-                  {/* Recipe Name */}
+                  {/* Formulation Name */}
                   <div
                     style={{
                       fontFamily: "'Poppins', sans-serif",
-                      fontSize: '16.5px',
+                      fontSize: '15px',
                       fontWeight: 700,
-                      lineHeight: 1.25,
+                      lineHeight: 1.28,
                       color: 'var(--cream)',
                     }}
                   >
@@ -265,12 +280,12 @@ export const Screen1Catalog: React.FC<Screen1CatalogProps> = ({
         )}
       </div>
 
-      {/* Screen 1 Footer: Exactly one primary orange button on the bottom-right */}
+      {/* Screen 1 Footer: Exactly one primary button bottom-right */}
       <div className="setup-foot" style={{ marginTop: '16px', paddingTop: '16px' }}>
         <div className="ready-msg">
           <span className="dot-live"></span>
-          <span>
-            {filteredRecipes.length} formulations available · Tap card to select
+          <span style={{ fontSize: '13px' }}>
+            {filteredRecipes.length} formulations available · Selected: <strong>{selectedRecipe.name}</strong> ({selectedRecipe.afiCode})
           </span>
         </div>
         <button
