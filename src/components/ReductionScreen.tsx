@@ -8,7 +8,6 @@ interface ReductionScreenProps {
   formulation: FormulationProfile;
   massHistory: { time: number; mass: number }[];
   tempHistory: { time: number; temp: number }[];
-  onSkipPhase: () => void;
 }
 
 export const ReductionScreen: React.FC<ReductionScreenProps> = ({
@@ -16,7 +15,6 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
   formulation,
   massHistory,
   tempHistory,
-  onSkipPhase,
 }) => {
   const { sensor } = brewState;
   const reductionPct = sensor.mass_g > 0
@@ -122,12 +120,6 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
 
       <div className="reduction-disclaimer">
         Scientific note: The adaptive endpoint is determined by mass measurement. Medicinal equivalence requires experimental comparison with a reference preparation.
-      </div>
-
-      <div className="brew-controls" style={{ justifyContent: 'flex-start' }}>
-        <button id="btn-skip-reduction" className="btn-skip-phase" onClick={onSkipPhase} title="Skip to Filtration (demo)">
-          ⏭ Skip to Filtration
-        </button>
       </div>
     </div>
   );

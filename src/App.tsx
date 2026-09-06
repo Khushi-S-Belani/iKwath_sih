@@ -255,7 +255,6 @@ export default function App() {
           <WaterFillScreen
             brewState={brewState}
             formulation={selectedFormulation}
-            onSkipPhase={machine.skipPhase}
           />
         );
       case 'live-brew':
@@ -268,7 +267,6 @@ export default function App() {
             onResume={() => machine.setPaused(false)}
             onCancel={handleCancelBrew}
             onViewDetails={() => setCurrentSection('reduction')}
-            onSkipPhase={machine.skipPhase}
           />
         );
       case 'reduction':
@@ -278,7 +276,6 @@ export default function App() {
             formulation={selectedFormulation}
             massHistory={massHistory}
             tempHistory={tempHistory}
-            onSkipPhase={machine.skipPhase}
           />
         );
       case 'filtration':
@@ -286,7 +283,6 @@ export default function App() {
           <FiltrationScreen
             brewState={brewState}
             onComplete={() => setCurrentSection('brew-passport')}
-            onSkipPhase={machine.skipPhase}
           />
         );
       case 'brew-passport':

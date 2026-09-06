@@ -5,12 +5,11 @@ import { LiveBrewState } from '../data/machineState';
 interface FiltrationScreenProps {
   brewState: LiveBrewState;
   onComplete: () => void;
-  onSkipPhase: () => void;
 }
 
 type FiltrationStep = { id: string; label: string; done: boolean; active: boolean };
 
-export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, onComplete, onSkipPhase }) => {
+export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, onComplete }) => {
   const { phase, sensor } = brewState;
 
   const isFiltering = phase === 'FILTRATION';
@@ -82,18 +81,6 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, o
         <div className="filtration-blocked">
           Flow restriction detected. Pump has been stopped. Check the filter path and call for service.
         </div>
-      )}
-
-      {/* Demo skip button — visible during active filtration/dispensing */}
-      {(isFiltering || isDispensing) && (
-        <button
-          id="btn-skip-filtration"
-          className="btn-skip-phase"
-          onClick={onSkipPhase}
-          title="Skip to next phase (demo)"
-        >
-          ⏭ Skip to {isFiltering ? 'Dispensing' : 'Complete'}
-        </button>
       )}
 
       {/* Complete action */}

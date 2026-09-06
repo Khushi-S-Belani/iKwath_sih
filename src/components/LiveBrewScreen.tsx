@@ -14,7 +14,6 @@ interface LiveBrewScreenProps {
   onResume: () => void;
   onCancel: () => void;
   onViewDetails: () => void;
-  onSkipPhase: () => void;
 }
 
 function formatTime(sec: number): string {
@@ -43,7 +42,6 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
   onResume,
   onCancel,
   onViewDetails,
-  onSkipPhase,
 }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const { sensor, stage, phase, paused, elapsed_sec, estimated_remaining_sec, fault } = brewState;
@@ -176,16 +174,6 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
           onClick={paused ? onResume : onPause}
         >
           {paused ? '▶ Resume' : '⏸ Pause'}
-        </button>
-
-        {/* Demo skip button */}
-        <button
-          id="btn-skip-phase"
-          className="btn-skip-phase"
-          onClick={onSkipPhase}
-          title="Skip to next brew stage (demo)"
-        >
-          ⏭ Skip Phase
         </button>
 
         <button

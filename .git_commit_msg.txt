@@ -1,0 +1,5 @@
+chore: remove demo skip buttons from all brew screens
+
+Removed skip phase buttons and DEMO badge from LiveBrewScreen,
+WaterFillScreen, ReductionScreen, and FiltrationScreen.
+Also cleaned up btn-skip-phase CSS and unused onSkipPhase props.

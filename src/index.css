@@ -614,43 +614,8 @@ html, body {
   font-size: 12px;
 }
 
-.btn-skip-phase {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--swiggy-orange-light);
-  color: var(--swiggy-orange);
-  border: 1.5px dashed var(--swiggy-orange);
-  border-radius: var(--r-md);
-  font-size: 12px;
-  font-weight: 800;
-  font-family: inherit;
-  cursor: pointer;
-  letter-spacing: 0.04em;
-  transition: all 0.2s ease;
-  position: relative;
-}
 
-.btn-skip-phase::before {
-  content: 'DEMO';
-  position: absolute;
-  top: -8px;
-  left: 8px;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  color: #FFFFFF;
-  background: var(--swiggy-orange);
-  padding: 1px 5px;
-  border-radius: 3px;
-}
 
-.btn-skip-phase:hover {
-  background: #DCFCE7;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
-}
 
 .btn-link {
   background: none;
