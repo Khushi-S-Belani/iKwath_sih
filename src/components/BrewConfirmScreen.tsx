@@ -22,18 +22,19 @@ export const BrewConfirmScreen: React.FC<BrewConfirmScreenProps> = ({
   const allReady = chamberReady && waterReady && safetyOk;
 
   const params = [
-    { label: 'Water input', value: `${formulation.water_ml} mL` },
-    { label: 'Temperature target', value: `${formulation.extraction_temp_c} °C` },
+    { label: 'Water to add', value: `${formulation.water_ml} mL (measured by Load Cell)` },
+    { label: 'Temperature target', value: `${formulation.extraction_temp_c} °C (PT100 feedback)` },
     { label: 'Soak time', value: `${formulation.soak_time_min} min` },
-    { label: 'Stirrer speed', value: `${formulation.stirrer_rpm} RPM` },
-    { label: 'Reduction endpoint', value: `~${formulation.reduction_endpoint_g} g` },
+    { label: 'Stirrer speed', value: `${formulation.stirrer_rpm} RPM (stepper motor)` },
+    { label: 'Reduction endpoint', value: `~${formulation.reduction_endpoint_g} g (HX711)` },
     { label: 'Est. total time', value: `${formulation.soak_time_min + formulation.extraction_time_min + 10} min` },
   ];
 
   const checks = [
-    { label: 'Pod detected', ok: true, id: 'pod' },
+    { label: 'Formulation profile loaded', ok: true, id: 'profile' },
+    { label: 'Pod placed in vessel', ok: true, id: 'pod' },
     { label: 'Chamber ready', ok: chamberReady, id: 'chamber' },
-    { label: 'Water ready', ok: waterReady, id: 'water' },
+    { label: 'Water source ready', ok: waterReady, id: 'water' },
     { label: 'Safety checks', ok: safetyOk, id: 'safety' },
   ];
 
@@ -43,7 +44,7 @@ export const BrewConfirmScreen: React.FC<BrewConfirmScreenProps> = ({
         {/* Left — Profile */}
         <div className="confirm-left">
           <div className="confirm-header">
-            <div className="confirm-title">CONFIRM BREW</div>
+            <div className="confirm-title">INSERT POD & ADD WATER</div>
             <StatusChip label={`PROFILE ${formulation.profile_revision}`} variant="active" />
           </div>
 
@@ -60,7 +61,8 @@ export const BrewConfirmScreen: React.FC<BrewConfirmScreenProps> = ({
           </div>
 
           <div className="confirm-note">
-            Estimated remaining time will be shown as an adaptive estimate — not a fixed countdown.
+            Place the herbal pod in the vessel and add {formulation.water_ml} mL of water manually or via inlet.
+            Water quantity will be precisely measured by the Load Cell + HX711 in the next step.
           </div>
         </div>
 
@@ -82,12 +84,12 @@ export const BrewConfirmScreen: React.FC<BrewConfirmScreenProps> = ({
               Back
             </button>
             <button
-              id="btn-start-extraction"
+              id="btn-start-brew"
               className="btn-primary btn-start"
               onClick={onStart}
               disabled={!allReady}
             >
-              {allReady ? '▶ START EXTRACTION' : 'NOT READY'}
+              {allReady ? '▶ START BREW' : 'NOT READY'}
             </button>
           </div>
 

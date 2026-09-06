@@ -18,25 +18,25 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, o
   const isComplete = phase === 'COMPLETE';
 
   const steps: FiltrationStep[] = [
-    { id: 'reduction', label: 'Reduction complete', done: true, active: false },
-    { id: 'filter', label: 'Filtration — Separating coarse powder', done: !isFiltering && !isDispensing && !isComplete ? false : !isFiltering, active: isFiltering },
-    { id: 'product', label: 'Product path selected', done: isDispensing || isComplete, active: isFiltering },
-    { id: 'dispense', label: 'Dispensing — Fresh decoction', done: isComplete, active: isDispensing },
-    { id: 'ready', label: 'Brew ready', done: isComplete, active: isComplete },
+    { id: 'reduction', label: 'Reduction complete — target endpoint reached', done: true, active: false },
+    { id: 'filter', label: 'Filter Extract — SS316 filter, bottom outlet', done: !isFiltering && !isDispensing && !isComplete ? false : !isFiltering, active: isFiltering },
+    { id: 'product', label: 'Product path open — filtrate collected', done: isDispensing || isComplete, active: isFiltering },
+    { id: 'dispense', label: 'Dispense Kwatha — Peristaltic pump + valve', done: isComplete, active: isDispensing },
+    { id: 'ready', label: 'Brew complete — fresh Kwatha ready', done: isComplete, active: isComplete },
   ];
 
   return (
     <div className="screen-content filtration-screen">
       <div className="filtration-header">
         <div className="filtration-title">
-          {isFiltering ? 'FILTRATION' : isDispensing ? 'DISPENSING' : 'BREW READY'}
+          {isFiltering ? 'FILTER EXTRACT' : isDispensing ? 'DISPENSE KWATHA' : 'BREW COMPLETE'}
         </div>
         <div className="filtration-sub">
           {isFiltering
-            ? 'Filtering spent coarse powder.'
+            ? 'Removable SS316 filter active — bottom outlet separating spent herbs.'
             : isDispensing
-            ? 'Dispensing fresh decoction.'
-            : 'Decoction is ready.'}
+            ? 'Peristaltic pump + valve — controlled and complete dispensing.'
+            : 'Fresh Kwatha decoction dispensed and ready.'}
         </div>
       </div>
 
@@ -73,7 +73,7 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, o
       {/* Safety note */}
       {isFiltering && (
         <div className="filtration-note">
-          <span>⚠</span> Keep the dispensing area clear during filtration.
+          <span>⚠</span> SS316 removable filter is active — keep dispensing area clear during filtration.
         </div>
       )}
 
@@ -100,7 +100,7 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, o
       {isComplete && (
         <div className="filtration-complete-block">
           <div className="filtration-complete-icon">✓</div>
-          <div className="filtration-complete-text">Fresh decoction dispensed</div>
+          <div className="filtration-complete-text">Fresh Kwatha decoction dispensed</div>
           <button id="btn-view-passport" className="btn-primary" onClick={onComplete}>
             VIEW BREW PASSPORT →
           </button>

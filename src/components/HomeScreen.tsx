@@ -99,18 +99,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Primary CTA */}
       <div className="home-cta">
         <button
-          id="btn-insert-pod"
+          id="btn-select-kwatha"
           className="btn-primary home-cta-btn"
           onClick={onInsertPod}
           disabled={!isReady}
-          aria-label="Insert pod and start brew"
+          aria-label="Select Kwatha formulation to start brew"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 5h6" />
+            <path d="M9 12l2 2 4-4" />
           </svg>
-          {isReady ? 'INSERT POD' : machineStatus}
+          {isReady ? 'SELECT KWATHA' : machineStatus}
         </button>
       </div>
 

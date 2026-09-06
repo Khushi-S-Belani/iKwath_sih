@@ -2,14 +2,16 @@ import React from 'react';
 import { BrewStage } from '../types';
 
 const STAGES: { key: BrewStage; label: string; micro: string }[] = [
-  { key: 'POD_DETECTED', label: 'Pod', micro: 'Detected' },
-  { key: 'SOAKING', label: 'Soaking', micro: 'Preparing powder' },
-  { key: 'EXTRACTION', label: 'Extraction', micro: 'Maintaining profile' },
-  { key: 'REDUCTION', label: 'Reduction', micro: 'Concentrating' },
-  { key: 'FILTRATION', label: 'Filtration', micro: 'Separating powder' },
-  { key: 'DISPENSING', label: 'Dispense', micro: 'Ready to serve' },
-  { key: 'CLEANING', label: 'Cleaning', micro: 'Rinse & drain' },
-  { key: 'READY', label: 'Ready', micro: 'System ready' },
+  { key: 'POD_DETECTED', label: 'Pod & Profile',  micro: 'Formulation loaded' },
+  { key: 'WATER_FILL',   label: 'Water Fill',     micro: 'Load Cell measuring' },
+  { key: 'SOAKING',      label: 'Soaking',        micro: 'Soak time per formula' },
+  { key: 'HEATING',      label: 'Heating',        micro: 'Induction + PT100' },
+  { key: 'STIRRING',     label: 'Stirring',       micro: 'Stepper motor active' },
+  { key: 'REDUCTION',    label: 'Reduction',      micro: 'Mass-endpoint detection' },
+  { key: 'FILTRATION',   label: 'Filter Extract', micro: 'SS316 bottom outlet' },
+  { key: 'DISPENSING',   label: 'Dispense',       micro: 'Peristaltic pump' },
+  { key: 'CLEANING',     label: 'Cleaning',       micro: 'Flow path rinse' },
+  { key: 'READY',        label: 'Ready',          micro: 'System ready' },
 ];
 
 interface StageStepperProps {

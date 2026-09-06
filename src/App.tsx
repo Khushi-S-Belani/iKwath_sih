@@ -3,6 +3,7 @@ import { DeviceRail } from './components/DeviceRail';
 import { HomeScreen } from './components/HomeScreen';
 import { PodScreen } from './components/PodScreen';
 import { BrewConfirmScreen } from './components/BrewConfirmScreen';
+import { WaterFillScreen } from './components/WaterFillScreen';
 import { LiveBrewScreen } from './components/LiveBrewScreen';
 import { ReductionScreen } from './components/ReductionScreen';
 import { FiltrationScreen } from './components/FiltrationScreen';
@@ -48,7 +49,7 @@ export default function App() {
     : brewState.fault ? 'FAULT'
     : 'BUSY';
 
-  const brewInProgress = ['SOAKING', 'EXTRACTION', 'REDUCTION', 'FILTRATION', 'DISPENSING'].includes(brewState.phase);
+  const brewInProgress = ['WATER_FILL', 'SOAKING', 'HEATING', 'STIRRING', 'REDUCTION', 'FILTRATION', 'DISPENSING'].includes(brewState.phase);
 
   // Track sensor history for charts
   useEffect(() => {
@@ -58,9 +59,11 @@ export default function App() {
     setTempHistory((prev) => [...prev.slice(-100), { time: parseFloat(timeMin.toFixed(2)), temp: brewState.sensor.temperature_c }]);
   }, [brewState.elapsed_sec]);
 
-  // Auto-navigate to live brew when brewing starts
+  // Auto-navigate based on brew phase
   useEffect(() => {
-    if (brewState.phase === 'SOAKING' || brewState.phase === 'EXTRACTION') {
+    if (brewState.phase === 'WATER_FILL') {
+      setCurrentSection('water-fill');
+    } else if (brewState.phase === 'SOAKING' || brewState.phase === 'HEATING' || brewState.phase === 'STIRRING') {
       setCurrentSection('live-brew');
     } else if (brewState.phase === 'REDUCTION') {
       // Don't force nav — let user see reduction screen if they go there
@@ -81,8 +84,10 @@ export default function App() {
         mass_profile: massHistory.slice(-60),
         stage_timestamps: {
           POD_DETECTED: 0,
+          WATER_FILL: 0.2,
           SOAKING: 0.5,
-          EXTRACTION: selectedFormulation.soak_time_min,
+          HEATING: selectedFormulation.soak_time_min,
+          STIRRING: selectedFormulation.soak_time_min + 2,
           REDUCTION: selectedFormulation.soak_time_min + selectedFormulation.extraction_time_min,
           FILTRATION: brewState.elapsed_sec / 60 - 3,
           DISPENSING: brewState.elapsed_sec / 60 - 1,
@@ -99,13 +104,19 @@ export default function App() {
     }
   }, [brewState.phase]);
 
-  // Pod scanning simulation
+  // Step 1: Select Kwatha — go to formulations screen first
   const handleInsertPod = useCallback(() => {
+    setCurrentSection('formulations');
+  }, []);
+
+  // Step 2: Formulation selected → load profile + scan pod
+  const handleFormulationSelected = useCallback((f: FormulationProfile) => {
+    setSelectedFormulation(f);
     setPodState('SCANNING');
     setCurrentSection('pod');
-    machine.scanPod(selectedFormulation.pod_id, selectedFormulation.id);
+    machine.scanPod(f.pod_id, f.id);
     setTimeout(() => setPodState('DETECTED'), 2000);
-  }, [selectedFormulation, machine]);
+  }, [machine]);
 
   const handlePodRetry = useCallback(() => {
     setPodState('SCANNING');
@@ -182,18 +193,19 @@ export default function App() {
 
   const SECTION_TITLES: Record<NavSection, { title: string; sub: string }> = {
     home: { title: 'Home', sub: 'Machine readiness and quick actions.' },
-    pod: { title: 'Pod Detection', sub: `Insert a validated pod to load a formulation profile.` },
-    'brew-confirm': { title: 'Confirm Brew', sub: `${selectedFormulation.name} · ${selectedFormulation.pod_id}` },
+    formulations: { title: 'Step 1 · Select Kwatha', sub: 'Choose a formulation or add a new pod profile.' },
+    pod: { title: 'Step 2 · Load Formulation Profile', sub: 'System loads and verifies process parameters.' },
+    'brew-confirm': { title: 'Step 3 · Insert Pod & Add Water', sub: `Place herbal pod in vessel and add water — ${selectedFormulation.name}` },
+    'water-fill': { title: 'Step 4 · Measure Water Quantity', sub: 'Load Cell + HX711 real-time weight measurement.' },
     'live-brew': { title: 'Live Brew', sub: `${selectedFormulation.name} · BREW #${brewState.brew_number}` },
-    reduction: { title: 'Adaptive Reduction', sub: 'Mass-driven endpoint detection.' },
-    filtration: { title: brewState.phase === 'DISPENSING' ? 'Dispensing' : 'Filtration', sub: 'Closed-path filtration and dispense.' },
+    reduction: { title: 'Step 8 · Monitor Reduction', sub: 'Load Cell + HX711 — tracking mass loss to target endpoint.' },
+    filtration: { title: brewState.phase === 'DISPENSING' ? 'Step 10 · Dispense Kwatha' : 'Step 9 · Filter Extract', sub: brewState.phase === 'DISPENSING' ? 'Peristaltic pump + valve — controlled dispensing.' : 'Removable SS316 filter — bottom outlet.' },
     'brew-passport': { title: 'Brew Passport', sub: `Complete brew record for ${selectedFormulation.name}.` },
-    cleaning: { title: 'Cleaning Cycle', sub: 'Automatic rinse and drain.' },
+    cleaning: { title: 'Step 11 · Cleaning / Rinse Cycle', sub: 'Washable flow path + filter rinse — manual or automated.' },
     history: { title: 'Brew History', sub: 'All recorded brews with search and filters.' },
     validation: { title: 'Validation Mode', sub: 'Traditional vs iKwath comparison.' },
     technician: { title: 'Technician Mode', sub: 'Diagnostics, calibration and actuator tests.' },
     research: { title: 'Research Mode', sub: 'Analytics, repeatability data and export.' },
-    formulations: { title: 'Formulations', sub: 'Validated formulation library.' },
   };
 
   const meta = SECTION_TITLES[currentSection];
@@ -211,6 +223,12 @@ export default function App() {
             onViewHistory={() => setCurrentSection('history')}
           />
         );
+      case 'formulations':
+        return (
+          <FormulationsScreen
+            onSelectFormulation={handleFormulationSelected}
+          />
+        );
       case 'pod':
         return (
           <PodScreen
@@ -218,7 +236,7 @@ export default function App() {
             formulation={selectedFormulation}
             onConfirm={handlePodConfirm}
             onRetry={handlePodRetry}
-            onBack={() => setCurrentSection('home')}
+            onBack={() => setCurrentSection('formulations')}
           />
         );
       case 'brew-confirm':
@@ -230,6 +248,14 @@ export default function App() {
             safetyOk={true}
             onStart={handleStartBrew}
             onBack={() => setCurrentSection('pod')}
+          />
+        );
+      case 'water-fill':
+        return (
+          <WaterFillScreen
+            brewState={brewState}
+            formulation={selectedFormulation}
+            onSkipPhase={machine.skipPhase}
           />
         );
       case 'live-brew':
@@ -293,12 +319,6 @@ export default function App() {
         return <TechnicianScreen />;
       case 'research':
         return <ResearchScreen />;
-      case 'formulations':
-        return (
-          <FormulationsScreen
-            onSelectFormulation={(f) => { setSelectedFormulation(f); handleInsertPod(); }}
-          />
-        );
       default:
         return null;
     }

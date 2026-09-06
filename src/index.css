@@ -2904,3 +2904,435 @@ input[type="text"]:focus {
   display: inline-block;
   animation: pulse-dot 2s infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   WATER FILL SCREEN — Step 4: Measure Water Quantity
+   (Load Cell + HX711 real-time weight measurement)
+══════════════════════════════════════════════════════════════ */
+
+.water-fill-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wf-header {
+  padding: 0 2px;
+}
+
+.wf-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.wf-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.wf-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+}
+
+/* Left panel — live reading */
+.wf-reading-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wf-mass-card {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.wf-mass-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.wf-mass-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.wf-mass-unit {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.wf-mass-target {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* Fill progress */
+.wf-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wf-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.wf-progress-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.wf-progress-track {
+  height: 10px;
+  background: var(--bg-surface-3);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.wf-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: 999px;
+  transition: width 0.6s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.wf-progress-fill.reached {
+  background: linear-gradient(90deg, #22C55E, #10B981);
+}
+
+.wf-progress-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 60%, rgba(255,255,255,0.35));
+  animation: shimmer-flow 1.5s linear infinite;
+}
+
+@keyframes shimmer-flow {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.wf-sensor-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Right panel — feedback loop */
+.wf-feedback-panel {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wf-feedback-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Flow diagram */
+.wf-flow-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.wf-flow-node {
+  background: var(--bg-surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 16px;
+  text-align: center;
+  width: 100%;
+}
+
+.wf-flow-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+.wf-flow-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.wf-flow-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.wf-flow-arrow {
+  font-size: 18px;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.wf-flow-diamond {
+  border: 2px dashed var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 18px;
+  text-align: center;
+  transform: rotate(0deg);
+  width: 100%;
+  transition: border-color 0.4s, background 0.4s;
+  background: var(--bg-surface-2);
+}
+
+.wf-flow-diamond.checking {
+  border-color: var(--warning);
+  background: var(--warning-dim);
+}
+
+.wf-flow-diamond.reached {
+  border-color: var(--success);
+  background: var(--success-dim);
+}
+
+.wf-diamond-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.wf-flow-branches {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.wf-branch {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.wf-branch-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.no-branch .wf-branch-label { color: var(--danger); }
+.yes-branch .wf-branch-label { color: var(--success); }
+
+.wf-branch-line {
+  width: 1px;
+  height: 16px;
+  background: var(--line-strong);
+}
+
+.wf-branch-action {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-surface-3);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.yes-branch.active .wf-branch-action {
+  background: var(--success-dim);
+  color: var(--success);
+  font-weight: 600;
+}
+
+/* Status badge */
+.wf-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.4s ease;
+}
+
+.wf-status-badge.filling {
+  background: var(--warning-dim);
+  color: var(--warning);
+  border: 1px solid rgba(219, 124, 56, 0.2);
+}
+
+.wf-status-badge.reached {
+  background: var(--success-dim);
+  color: var(--success);
+  border: 1px solid rgba(96, 178, 70, 0.25);
+}
+
+.wf-status-icon {
+  font-size: 14px;
+}
+
+.wf-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  animation: pulse-dot 1.2s infinite;
+  flex-shrink: 0;
+}
+
+.wf-elapsed {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCTION FEEDBACK LOOP — Step 8
+══════════════════════════════════════════════════════════════ */
+
+.reduction-feedback-loop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: var(--bg-surface-2);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.reduction-feedback-loop.monitoring {
+  border-color: rgba(219, 124, 56, 0.3);
+  background: var(--warning-dim);
+}
+
+.reduction-feedback-loop.reached {
+  border-color: rgba(96, 178, 70, 0.3);
+  background: var(--success-dim);
+}
+
+.rfl-sensor {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.rfl-arrow {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.rfl-decision {
+  background: var(--bg-surface);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.rfl-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rfl-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.rfl-status.no {
+  background: var(--warning-dim);
+  color: var(--warning);
+}
+
+.rfl-status.yes {
+  background: var(--success-dim);
+  color: var(--success);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIVE BREW — Sensor Tag
+══════════════════════════════════════════════════════════════ */
+
+.brew-sensor-tag {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POD SCREEN — Profile Verified Note
+══════════════════════════════════════════════════════════════ */
+
+.pod-profile-verified-note {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-dim);
+  border: 1px solid rgba(96, 178, 70, 0.25);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+

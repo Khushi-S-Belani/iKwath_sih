@@ -67,23 +67,23 @@ export const PodScreen: React.FC<PodScreenProps> = ({ podState, formulation, onC
 
       {podState === 'SCANNING' && (
         <div className="pod-state-block">
-          <div className="pod-state-title">Reading pod{dots}</div>
-          <div className="pod-state-sub">Hold the pod steady while the system identifies the formulation profile.</div>
+          <div className="pod-state-title">Loading formulation profile{dots}</div>
+          <div className="pod-state-sub">System is loading and verifying process parameters for the selected Kwatha.</div>
         </div>
       )}
 
       {podState === 'DETECTED' && formulation && (
         <div className="pod-detected-block">
           <div className="pod-detected-header">
-            <StatusChip label="POD DETECTED" variant="active" />
-            <StatusChip label={`PROFILE ${formulation.profile_revision}`} variant="info" />
+            <StatusChip label="PROFILE LOADED" variant="active" />
+            <StatusChip label={`REV ${formulation.profile_revision}`} variant="info" />
           </div>
           <div className="pod-formulation-name">{formulation.name}</div>
           <div className="pod-id-row">Pod ID: <span>{formulation.pod_id}</span></div>
 
           <div className="pod-params-grid">
             <div className="pod-param">
-              <div className="pod-param-label">Water</div>
+              <div className="pod-param-label">Water Target</div>
               <div className="pod-param-value">{formulation.water_ml} mL</div>
             </div>
             <div className="pod-param">
@@ -91,7 +91,7 @@ export const PodScreen: React.FC<PodScreenProps> = ({ podState, formulation, onC
               <div className="pod-param-value">{formulation.extraction_temp_c} °C</div>
             </div>
             <div className="pod-param">
-              <div className="pod-param-label">Soaking</div>
+              <div className="pod-param-label">Soak Time</div>
               <div className="pod-param-value">{formulation.soak_time_min} min</div>
             </div>
             <div className="pod-param">
@@ -105,10 +105,14 @@ export const PodScreen: React.FC<PodScreenProps> = ({ podState, formulation, onC
             <div className="pod-herbs-list">{formulation.herbs.join(' · ')}</div>
           </div>
 
+          <div className="pod-profile-verified-note">
+            ✓ Profile verified — ready for pod insertion and water fill
+          </div>
+
           <div className="pod-cta-row">
             <button id="btn-pod-back" className="btn-secondary" onClick={onBack}>Back</button>
             <button id="btn-pod-confirm" className="btn-primary" onClick={onConfirm}>
-              PROCEED TO CONFIRMATION →
+              INSERT POD & ADD WATER →
             </button>
           </div>
         </div>

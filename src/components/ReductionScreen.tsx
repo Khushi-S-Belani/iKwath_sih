@@ -29,9 +29,22 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
   return (
     <div className="screen-content reduction-screen">
       <div className="reduction-header">
-        <div className="reduction-title">ADAPTIVE REDUCTION</div>
+        <div className="reduction-title">MONITOR REDUCTION</div>
         <div className="reduction-sub">
-          The system is concentrating the decoction by monitoring mass — not a fixed timer.
+          Load Cell + HX711 tracking mass loss to target endpoint — not a fixed timer.
+        </div>
+      </div>
+
+      {/* Feedback Loop Badge */}
+      <div className={`reduction-feedback-loop ${reductionPct >= 98 ? 'reached' : 'monitoring'}`}>
+        <div className="rfl-sensor">Load Cell + HX711</div>
+        <div className="rfl-arrow">→</div>
+        <div className="rfl-decision">
+          <span className="rfl-label">Target Reduction Reached?</span>
+        </div>
+        <div className="rfl-arrow">→</div>
+        <div className={`rfl-status ${reductionPct >= 98 ? 'yes' : 'no'}`}>
+          {reductionPct >= 98 ? '✓ Yes — Proceeding to Filter' : 'No — Monitoring…'}
         </div>
       </div>
 

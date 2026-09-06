@@ -33,8 +33,8 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'pod',
-    label: 'Pod',
-    icon: <Icon d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />,
+    label: 'Brew',
+    icon: <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 5h6M9 12l2 2 4-4" />,
     modes: ['user', 'technician', 'research'],
   },
   {
@@ -123,7 +123,7 @@ export const DeviceRail: React.FC<DeviceRailProps> = ({
       <nav className="rail-nav">
         {visibleItems.map((item) => {
           const isActive = currentSection === item.id;
-          const isDisabled = brewInProgress && !['live-brew', 'reduction', 'filtration'].includes(item.id);
+          const isDisabled = brewInProgress && !['water-fill', 'live-brew', 'reduction', 'filtration'].includes(item.id);
           return (
             <button
               key={item.id}

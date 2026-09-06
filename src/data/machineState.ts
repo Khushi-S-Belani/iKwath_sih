@@ -6,8 +6,10 @@ export type BrewPhase =
   | 'SCANNING'
   | 'DETECTED'
   | 'CONFIRMED'
+  | 'WATER_FILL'
   | 'SOAKING'
-  | 'EXTRACTION'
+  | 'HEATING'
+  | 'STIRRING'
   | 'REDUCTION'
   | 'FILTRATION'
   | 'DISPENSING'
@@ -55,37 +57,63 @@ const INITIAL_STATE: LiveBrewState = {
 
 // ─── DEMO phase definitions (whole seconds, clearly visible) ──────────────────
 const DEMO_PHASES: { phase: BrewPhase; durationSec: number }[] = [
-  { phase: 'SOAKING',    durationSec: 10 },  // 10 s — heating up
-  { phase: 'EXTRACTION', durationSec: 12 },  // 12 s — controlled extraction
-  { phase: 'REDUCTION',  durationSec: 12 },  // 12 s — mass reducing
-  { phase: 'FILTRATION', durationSec:  8 },  //  8 s — pump active
-  { phase: 'DISPENSING', durationSec:  6 },  //  6 s — final dispense
+  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — load cell measuring water quantity
+  { phase: 'SOAKING',    durationSec: 10 },  // 10 s — soak time per formulation
+  { phase: 'HEATING',    durationSec: 10 },  // 10 s — induction heating + PT100 feedback
+  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — stepper motor stirring during extraction
+  { phase: 'REDUCTION',  durationSec: 12 },  // 12 s — mass-driven endpoint detection
+  { phase: 'FILTRATION', durationSec:  8 },  //  8 s — SS316 filter, bottom outlet
+  { phase: 'DISPENSING', durationSec:  6 },  //  6 s — peristaltic pump dispense
   { phase: 'COMPLETE',   durationSec:  0 },
 ];
-const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 48 s
+const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 64 s
 
 // ─── Sensor evolution per phase ───────────────────────────────────────────────
 function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): SensorData {
   const s = { ...prev };
 
   switch (phase) {
+    case 'WATER_FILL':
+      // Load Cell + HX711 measuring water fill — heating off, no stirring
+      s.heater = 'OFF';
+      s.stirrer = 'OFF';
+      s.pump = 'OFF';
+      s.product_valve = 'CLOSED';
+      s.drain_valve = 'CLOSED';
+      s.temperature_c = 24 + (Math.random() - 0.5) * 0.3;
+      // Mass rises as water fills (simulate water inlet)
+      s.mass_g = Math.min(400, 50 + elapsed * 44 + (Math.random() - 0.5) * 2);
+      break;
+
     case 'SOAKING':
+      // Maintain soak time per formulation — gentle warm-up
       s.heater = 'ACTIVE';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = Math.min(90, 25 + elapsed * 6 + (Math.random() - 0.5) * 0.5);
+      s.temperature_c = Math.min(60, 25 + elapsed * 3.5 + (Math.random() - 0.5) * 0.5);
       s.mass_g = 400 + (Math.random() - 0.5) * 2;
       break;
 
-    case 'EXTRACTION':
+    case 'HEATING':
+      // Induction heating + PT100 temperature feedback — no stirring yet
+      s.heater = 'ACTIVE';
+      s.stirrer = 'OFF';
+      s.pump = 'OFF';
+      s.temperature_c = Math.min(90, 60 + elapsed * 3 + (Math.random() - 0.5) * 0.5);
+      s.mass_g = 400 - elapsed * 1.5 + (Math.random() - 0.5) * 1.5;
+      break;
+
+    case 'STIRRING':
+      // Stepper motor stirring during extraction at profile-based speed
       s.heater = 'ACTIVE';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
       s.temperature_c = 88 + Math.sin(elapsed * 0.3) * 1.5 + (Math.random() - 0.5) * 0.4;
-      s.mass_g = Math.max(350, 400 - elapsed * 4 + (Math.random() - 0.5) * 2);
+      s.mass_g = Math.max(350, 385 - elapsed * 3.5 + (Math.random() - 0.5) * 2);
       break;
 
     case 'REDUCTION':
+      // Load Cell + HX711 monitoring mass loss to target endpoint
       s.heater = 'ACTIVE';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
@@ -94,6 +122,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'FILTRATION':
+      // SS316 removable filter — bottom outlet active
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -103,6 +132,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'DISPENSING':
+      // Peristaltic pump + valve — controlled and complete dispensing
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -112,6 +142,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'CLEANING':
+      // Washable flow path + filter rinse
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -139,8 +170,10 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
 
 export function phaseToStage(phase: BrewPhase): BrewStage {
   const map: Partial<Record<BrewPhase, BrewStage>> = {
+    WATER_FILL: 'WATER_FILL',
     SOAKING: 'SOAKING',
-    EXTRACTION: 'EXTRACTION',
+    HEATING: 'HEATING',
+    STIRRING: 'STIRRING',
     REDUCTION: 'REDUCTION',
     FILTRATION: 'FILTRATION',
     DISPENSING: 'DISPENSING',
@@ -200,15 +233,15 @@ export function useMachineState() {
 
     setState((prev) => ({
       ...prev,
-      phase: 'SOAKING',
-      stage: 'SOAKING',
+      phase: 'WATER_FILL',
+      stage: 'WATER_FILL',
       elapsed_sec: 0,
       estimated_remaining_sec: TOTAL_DEMO_SEC,
       pod_id,
       formulation_id,
       paused: false,
       fault: null,
-      sensor: { ...INITIAL_SENSOR, mass_g: 400 },
+      sensor: { ...INITIAL_SENSOR, mass_g: 50 }, // starts low, fills up
     }));
 
     timerRef.current = setInterval(() => {

@@ -4,8 +4,10 @@ export type MachineMode = 'user' | 'technician' | 'research';
 // ─── Navigation Sections ──────────────────────────────────────────────────────
 export type NavSection =
   | 'home'
+  | 'formulations'
   | 'pod'
   | 'brew-confirm'
+  | 'water-fill'
   | 'live-brew'
   | 'reduction'
   | 'filtration'
@@ -14,14 +16,15 @@ export type NavSection =
   | 'history'
   | 'validation'
   | 'technician'
-  | 'research'
-  | 'formulations';
+  | 'research';
 
 // ─── Brew Stages ─────────────────────────────────────────────────────────────
 export type BrewStage =
   | 'POD_DETECTED'
+  | 'WATER_FILL'
   | 'SOAKING'
-  | 'EXTRACTION'
+  | 'HEATING'
+  | 'STIRRING'
   | 'REDUCTION'
   | 'FILTRATION'
   | 'DISPENSING'
