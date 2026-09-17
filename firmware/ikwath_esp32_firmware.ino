@@ -738,7 +738,7 @@ void handleSerialCommands() {
     Serial.printf("{\"ack\":\"invert_pump\",\"pump_active_low\":%s}\n", pumpActiveLow ? "true" : "false");
     sendTelemetry();
   }
-  // 9. STIRRER SERVO CONTROLS
+  // 9. STIRRER SERVO CONTROLS (GPIO 13)
   else if (line.indexOf("stirrer_on") >= 0 || line.equalsIgnoreCase("STIRRER_ON")) {
     setStirrerSweep(true);
     Serial.println("{\"ack\":\"stirrer_on\",\"stirrer\":\"ACTIVE\"}");
@@ -751,8 +751,17 @@ void handleSerialCommands() {
     setStirrerSweep(!stirrerActive);
     Serial.printf("{\"ack\":\"test_stirrer\",\"stirrer\":%s}\n", stirrerActive ? "\"ACTIVE\"" : "\"OFF\"");
     sendTelemetry();
+  } else if (line.startsWith("SET_STIRRER:") || line.indexOf("set_stirrer_deg") >= 0) {
+    int idx = line.indexOf(":");
+    if (idx < 0) idx = line.indexOf("\"angle\":") + 8;
+    int deg = line.substring(idx + 1).toInt();
+    setStirrerSweep(false);
+    stirrerAngle = constrain(deg, 0, 180);
+    servoStirrer.write(stirrerAngle);
+    Serial.printf("{\"ack\":\"set_stirrer\",\"stirrer_deg\":%d}\n", stirrerAngle);
+    sendTelemetry();
   }
-  // 10. POD DISPENSER FLAP SERVO CONTROLS
+  // 10. POD DISPENSER FLAP SERVO CONTROLS (GPIO 14)
   else if (line.indexOf("pod_open") >= 0 || line.equalsIgnoreCase("POD_OPEN")) {
     setPodFlap(90);
     Serial.println("{\"ack\":\"pod_open\",\"pod_deg\":90}");
@@ -762,10 +771,36 @@ void handleSerialCommands() {
     Serial.println("{\"ack\":\"pod_close\",\"pod_deg\":0}");
     sendTelemetry();
   } else if (line.indexOf("test_pod") >= 0 || line.equalsIgnoreCase("POD_TEST")) {
+    Serial.println("{\"status\":\"Testing Pod Flap Servo (0 -> 90 -> 0)...\"}");
     setPodFlap(90);
     delay(1200);
     setPodFlap(0);
     Serial.println("{\"ack\":\"test_pod\",\"pod_deg\":0}");
+    sendTelemetry();
+  } else if (line.startsWith("SET_POD:") || line.indexOf("set_pod_deg") >= 0) {
+    int idx = line.indexOf(":");
+    if (idx < 0) idx = line.indexOf("\"angle\":") + 8;
+    int deg = line.substring(idx + 1).toInt();
+    setPodFlap(deg);
+    Serial.printf("{\"ack\":\"set_pod\",\"pod_deg\":%d}\n", currentPodAngle);
+    sendTelemetry();
+  } else if (line.indexOf("test_all_servos") >= 0 || line.equalsIgnoreCase("SERVOS_SWEEP")) {
+    Serial.println("{\"status\":\"Executing Dual Servo Sweep Test...\"}");
+    setStirrerSweep(false);
+    for (int a = 0; a <= 90; a += 15) {
+      servoPodFlap.write(a);
+      servoStirrer.write(30 + a);
+      delay(80);
+    }
+    delay(400);
+    for (int a = 90; a >= 0; a -= 15) {
+      servoPodFlap.write(a);
+      servoStirrer.write(30 + a);
+      delay(80);
+    }
+    setPodFlap(0);
+    servoStirrer.write(30);
+    Serial.println("{\"ack\":\"test_all_servos\",\"status\":\"COMPLETE\"}");
     sendTelemetry();
   }
   // 11. HEATER RELAY CONTROLS
