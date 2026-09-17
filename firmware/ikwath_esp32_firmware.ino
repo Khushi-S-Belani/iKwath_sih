@@ -4,6 +4,7 @@
   ESP32 Master Controller Firmware
   =============================================================================
   Features:
+  - Built-in Onboard LED indicator on GPIO 2 (Turns ON when connected to Web Serial)
   - Push Button Trigger (Single click: Start/Pause, Double click: Toggle Temp Sim)
   - Peristaltic / Sado Pump (Water intake & dispensing via 6mm pipe)
   - Hall-effect Flow Sensor (Interrupt-driven pulse counter for precise mL)
@@ -18,7 +19,7 @@
   - 5V Relay Module (Heater / Induction element on GPIO 27)
   - Active Buzzer (Audible notifications on GPIO 25)
   - Optional 4x4 Keypad (Recipe selection, Start/Stop, Diagnostics)
-  - Bi-directional USB Web Serial & WiFi WebSocket JSON Communication
+  - Bi-directional USB Web Serial JSON Communication at 115200 Baud
   =============================================================================
 */
 
@@ -37,6 +38,7 @@
 // =============================================================================
 // PIN DEFINITIONS
 // =============================================================================
+#define PIN_LED_BUILTIN       2   // Onboard Blue LED (Lights up when connected & active)
 #define PIN_BUTTON_START      4   // Push Button (Active LOW with internal pull-up)
 #define PIN_FLOW_SENSOR      18   // Flow Sensor Pulse Input (Interrupt)
 #define PIN_DS18B20_DATA     19   // DS18B20 Temperature Data (Needs 4.7k pullup to 3.3V)
@@ -465,7 +467,6 @@ void handlePushButton() {
 
   // Detect double click to toggle Temperature Simulation Mode
   // If button was pressed twice within 600ms
-  static unsigned long lastClickWindow = 0;
   static int clickSeq = 0;
   if (reading == LOW && lastButtonState == HIGH && (now - lastButtonPressTime <= 600)) {
     clickSeq++;
@@ -530,34 +531,49 @@ void handleSerialCommands() {
   line.trim();
   if (line.length() == 0) return;
 
+  // Turn ON Built-in LED on any active connection / command
+  digitalWrite(PIN_LED_BUILTIN, HIGH);
+
   // Quick text commands or JSON parser
-  if (line.indexOf("\"cmd\":\"start\"") >= 0 || line.equalsIgnoreCase("START")) {
+  if (line.indexOf("\"cmd\":\"connect\"") >= 0 || line.equalsIgnoreCase("CONNECT")) {
+    digitalWrite(PIN_LED_BUILTIN, HIGH);
+    beep(80, 2);
+    Serial.println("{\"status\":\"connected\",\"led\":\"ON\",\"device\":\"iKwath ESP32\"}");
+  } else if (line.indexOf("\"cmd\":\"start\"") >= 0 || line.equalsIgnoreCase("START")) {
     startBrewProcess();
+    Serial.println("{\"ack\":\"start\"}");
   } else if (line.indexOf("\"cmd\":\"stop\"") >= 0 || line.equalsIgnoreCase("STOP")) {
     stopBrewProcess();
+    Serial.println("{\"ack\":\"stop\"}");
   } else if (line.indexOf("\"cmd\":\"pause\"") >= 0 || line.equalsIgnoreCase("PAUSE")) {
-    isPaused = true;
-  } else if (line.indexOf("\"cmd\":\"resume\"") >= 0 || line.equalsIgnoreCase("RESUME")) {
-    isPaused = false;
+    isPaused = !isPaused;
+    Serial.printf("{\"ack\":\"pause\",\"paused\":%s}\n", isPaused ? "true" : "false");
   } else if (line.indexOf("\"cmd\":\"clean\"") >= 0 || line.equalsIgnoreCase("CLEAN")) {
     setPhase(PHASE_CLEANING);
+    Serial.println("{\"ack\":\"clean\"}");
   } else if (line.indexOf("\"cmd\":\"toggle_sim\"") >= 0 || line.equalsIgnoreCase("TOGGLE_SIM")) {
     tempSimulationMode = !tempSimulationMode;
     beep(100, 2);
+    Serial.printf("{\"ack\":\"toggle_sim\",\"sim_mode\":%s}\n", tempSimulationMode ? "true" : "false");
   } else if (line.indexOf("\"cmd\":\"test_pump\"") >= 0) {
     bool state = (digitalRead(PIN_PUMP_MOSFET) == LOW);
     setPump(state);
+    Serial.printf("{\"ack\":\"test_pump\",\"pump\":%s}\n", state ? "\"ACTIVE\"" : "\"OFF\"");
   } else if (line.indexOf("\"cmd\":\"test_stirrer\"") >= 0) {
     stirrerActive = !stirrerActive;
+    Serial.printf("{\"ack\":\"test_stirrer\",\"stirrer\":%s}\n", stirrerActive ? "\"ACTIVE\"" : "\"OFF\"");
   } else if (line.indexOf("\"cmd\":\"test_pod\"") >= 0) {
     setPodFlap(90);
     delay(1000);
     setPodFlap(0);
+    Serial.println("{\"ack\":\"test_pod\"}");
   } else if (line.indexOf("\"cmd\":\"test_relay\"") >= 0) {
     bool cur = (digitalRead(PIN_HEATER_RELAY) == RELAY_ACTIVE_STATE);
     setHeater(!cur);
+    Serial.printf("{\"ack\":\"test_relay\",\"heater\":%s}\n", !cur ? "\"ACTIVE\"" : "\"OFF\"");
   } else if (line.indexOf("\"cmd\":\"test_buzzer\"") >= 0) {
     beep(150, 2);
+    Serial.println("{\"ack\":\"test_buzzer\"}");
   } else if (line.indexOf("\"set_water\":") >= 0) {
     int idx = line.indexOf("\"set_water\":") + 12;
     float w = line.substring(idx).toFloat();
@@ -577,6 +593,7 @@ void setup() {
   Serial.println("================================================");
 
   // Configure GPIO Modes
+  pinMode(PIN_LED_BUILTIN, OUTPUT);
   pinMode(PIN_BUTTON_START, INPUT_PULLUP);
   pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
   pinMode(PIN_BUZZER, OUTPUT);
@@ -584,6 +601,7 @@ void setup() {
   pinMode(PIN_HEATER_RELAY, OUTPUT);
 
   // Initial Pin States
+  digitalWrite(PIN_LED_BUILTIN, HIGH); // Turn ON Built-in LED on GPIO 2 immediately on boot!
   digitalWrite(PIN_BUZZER, LOW);
   digitalWrite(PIN_PUMP_MOSFET, LOW);
   digitalWrite(PIN_HEATER_RELAY, RELAY_INACTIVE_STATE);
@@ -617,7 +635,7 @@ void setup() {
 
   // Welcome Beep
   beep(100, 2, 80);
-  Serial.println("[SYSTEM] iKwath ESP32 Controller Ready. 115200 Baud.");
+  Serial.println("[SYSTEM] iKwath ESP32 Controller Ready. Built-in LED ON. 115200 Baud.");
 }
 
 // =============================================================================

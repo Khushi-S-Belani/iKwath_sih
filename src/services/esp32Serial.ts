@@ -24,7 +24,6 @@ type ConnectionCallback = (connected: boolean, portInfo?: string) => void;
 class ESP32SerialService {
   private port: any = null;
   private reader: any = null;
-  private writer: any = null;
   private keepReading = false;
   private telemetryCallbacks: Set<TelemetryCallback> = new Set();
   private connectionCallbacks: Set<ConnectionCallback> = new Set();
@@ -69,6 +68,11 @@ class ESP32SerialService {
       this.keepReading = true;
       this.readSerialLoop();
 
+      // Send initial connect handshake command to light built-in LED & sync
+      setTimeout(() => {
+        this.sendCommand({ cmd: 'connect' });
+      }, 500);
+
       return true;
     } catch (err: any) {
       this.isConnectedState = false;
@@ -98,65 +102,70 @@ class ESP32SerialService {
     }
   }
 
-  // Send Command to ESP32
-  public async sendCommand(cmd: string | object): Promise<void> {
+  // Robust Direct UTF-8 Command Sender without stream pipe locking
+  public async sendCommand(cmd: string | object): Promise<boolean> {
     if (!this.port || !this.isConnectedState) {
-      console.warn('Cannot send command: ESP32 is not connected');
-      return;
+      console.warn('[ESP32] Cannot send command: ESP32 is not connected');
+      return false;
     }
 
     try {
-      const textEncoder = new TextEncoderStream();
-      const writableStreamClosed = textEncoder.readable.pipeTo(this.port.writable);
-      const writer = textEncoder.writable.getWriter();
-
       const payload = typeof cmd === 'string' ? cmd : JSON.stringify(cmd);
-      await writer.write(payload + '\n');
-      writer.releaseLock();
+      const encoder = new TextEncoder();
+      const data = encoder.encode(payload + '\n');
+
+      if (this.port.writable) {
+        const writer = this.port.writable.getWriter();
+        await writer.write(data);
+        writer.releaseLock();
+        console.log('[ESP32 SENT]', payload);
+        return true;
+      }
     } catch (err) {
-      console.error('Error writing to Serial port:', err);
+      console.error('[ESP32] Error writing to Serial port:', err);
     }
+    return false;
   }
 
   // Helper command shortcuts
-  public async startBrew(waterMl = 400): Promise<void> {
-    await this.sendCommand({ cmd: 'start', set_water: waterMl });
+  public async startBrew(waterMl = 400): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'start', set_water: waterMl });
   }
 
-  public async stopBrew(): Promise<void> {
-    await this.sendCommand({ cmd: 'stop' });
+  public async stopBrew(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'stop' });
   }
 
-  public async togglePause(): Promise<void> {
-    await this.sendCommand({ cmd: 'pause' });
+  public async togglePause(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'pause' });
   }
 
-  public async toggleTempSimulation(): Promise<void> {
-    await this.sendCommand({ cmd: 'toggle_sim' });
+  public async toggleTempSimulation(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'toggle_sim' });
   }
 
-  public async testPump(): Promise<void> {
-    await this.sendCommand({ cmd: 'test_pump' });
+  public async testPump(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'test_pump' });
   }
 
-  public async testStirrer(): Promise<void> {
-    await this.sendCommand({ cmd: 'test_stirrer' });
+  public async testStirrer(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'test_stirrer' });
   }
 
-  public async testPodFlap(): Promise<void> {
-    await this.sendCommand({ cmd: 'test_pod' });
+  public async testPodFlap(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'test_pod' });
   }
 
-  public async testRelay(): Promise<void> {
-    await this.sendCommand({ cmd: 'test_relay' });
+  public async testRelay(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'test_relay' });
   }
 
-  public async testBuzzer(): Promise<void> {
-    await this.sendCommand({ cmd: 'test_buzzer' });
+  public async testBuzzer(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'test_buzzer' });
   }
 
-  public async startCleaning(): Promise<void> {
-    await this.sendCommand({ cmd: 'clean' });
+  public async startCleaning(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'clean' });
   }
 
   private async readSerialLoop() {
@@ -175,7 +184,7 @@ class ESP32SerialService {
           }
         }
       } catch (error) {
-        console.warn('Serial read error:', error);
+        console.warn('[ESP32] Serial read loop notice:', error);
       } finally {
         if (this.reader) {
           this.reader.releaseLock();
