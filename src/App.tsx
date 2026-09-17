@@ -14,9 +14,11 @@ import { ValidationScreen } from './components/ValidationScreen';
 import { TechnicianScreen } from './components/TechnicianScreen';
 import { ResearchScreen } from './components/ResearchScreen';
 import { FormulationsScreen } from './components/FormulationsScreen';
+import { HardwareControlModal } from './components/HardwareControlModal';
 import { useMachineState } from './data/machineState';
 import { BREW_HISTORY } from './data/brewHistory';
 import { FORMULATIONS } from './data/formulations';
+import { esp32Serial } from './services/esp32Serial';
 import { NavSection, MachineMode, MachineStatus, FormulationProfile, BrewRecord } from './types';
 
 type PodState = 'IDLE' | 'SCANNING' | 'DETECTED' | 'INVALID' | 'READ_FAILED';
@@ -36,10 +38,19 @@ export default function App() {
   const [is24Hour, setIs24Hour] = useState(false);
   const [meridiem, setMeridiem] = useState('AM');
   const [scale, setScale] = useState(1);
+  const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+  const [isHardwareConnected, setIsHardwareConnected] = useState(esp32Serial.isConnected());
   const outerWrapRef = useRef<HTMLDivElement>(null);
 
   const machine = useMachineState();
   const { state: brewState } = machine;
+
+  // Listen to ESP32 connection state
+  useEffect(() => {
+    return esp32Serial.onConnectionChange((connected) => {
+      setIsHardwareConnected(connected);
+    });
+  }, []);
 
   // Machine status derived from brew phase
   const machineStatus: MachineStatus =
@@ -196,9 +207,9 @@ export default function App() {
     formulations: { title: 'Step 1 · Select Kwatha', sub: 'Choose a formulation or add a new pod profile.' },
     pod: { title: 'Step 2 · Load Formulation Profile', sub: 'System loads and verifies process parameters.' },
     'brew-confirm': { title: 'Step 3 · Insert Pod & Add Water', sub: `Place herbal pod in vessel and add water — ${selectedFormulation.name}` },
-    'water-fill': { title: 'Step 4 · Measure Water Quantity', sub: 'Load Cell + HX711 real-time weight measurement.' },
+    'water-fill': { title: 'Step 4 · Measure Water Quantity', sub: 'Load Cell + Flow Sensor real-time fluid measurement.' },
     'live-brew': { title: 'Live Brew', sub: `${selectedFormulation.name} · BREW #${brewState.brew_number}` },
-    reduction: { title: 'Step 8 · Monitor Reduction', sub: 'Load Cell + HX711 — tracking mass loss to target endpoint.' },
+    reduction: { title: 'Step 8 · Monitor Reduction', sub: 'Load Cell + Temperature — tracking decoction reduction endpoint.' },
     filtration: { title: brewState.phase === 'DISPENSING' ? 'Step 10 · Dispense Kwatha' : 'Step 9 · Filter Extract', sub: brewState.phase === 'DISPENSING' ? 'Peristaltic pump + valve — controlled dispensing.' : 'Removable SS316 filter — bottom outlet.' },
     'brew-passport': { title: 'Brew Passport', sub: `Complete brew record for ${selectedFormulation.name}.` },
     cleaning: { title: 'Step 11 · Cleaning / Rinse Cycle', sub: 'Washable flow path + filter rinse — manual or automated.' },
@@ -312,7 +323,7 @@ export default function App() {
       case 'validation':
         return <ValidationScreen />;
       case 'technician':
-        return <TechnicianScreen />;
+        return <TechnicianScreen onOpenHardwareModal={() => setIsHardwareModalOpen(true)} />;
       case 'research':
         return <ResearchScreen />;
       default:
@@ -343,6 +354,8 @@ export default function App() {
               mode={mode}
               onModeChange={setMode}
               brewInProgress={brewInProgress}
+              onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
+              isHardwareConnected={isHardwareConnected}
             />
 
             <main className="main">
@@ -353,6 +366,37 @@ export default function App() {
                   <div className="screen-sub">{meta.sub}</div>
                 </div>
                 <div className="topbar-right">
+                  {/* ESP32 Hardware Badge */}
+                  <button
+                    onClick={() => setIsHardwareModalOpen(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      backgroundColor: isHardwareConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(30, 41, 59, 0.6)',
+                      border: isHardwareConnected ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(71, 85, 105, 0.4)',
+                      color: isHardwareConnected ? '#34d399' : '#94a3b8',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    title="Open ESP32 Hardware Bridge & Diagnostics"
+                  >
+                    <span
+                      style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        backgroundColor: isHardwareConnected ? '#10b981' : '#64748b',
+                        boxShadow: isHardwareConnected ? '0 0 6px #10b981' : 'none',
+                      }}
+                    />
+                    {isHardwareConnected ? 'ESP32 LIVE' : 'CONNECT ESP32'}
+                  </button>
+
                   {/* Brew active indicator */}
                   {brewInProgress && (
                     <div className="brew-active-badge">
@@ -360,6 +404,7 @@ export default function App() {
                       BREW ACTIVE
                     </div>
                   )}
+
                   {/* Clock */}
                   <div
                     className="time-bar-capsule"
@@ -387,6 +432,13 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* ESP32 Hardware Controller & Simulation Modal */}
+      <HardwareControlModal
+        isOpen={isHardwareModalOpen}
+        onClose={() => setIsHardwareModalOpen(false)}
+        onStartHardwareBrew={handleStartBrew}
+      />
     </div>
   );
 }

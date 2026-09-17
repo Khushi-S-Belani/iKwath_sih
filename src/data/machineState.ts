@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { SensorData, BrewStage, ActuatorState, ValveState } from '../types';
+import { esp32Serial, ESP32Telemetry } from '../services/esp32Serial';
 
 export type BrewPhase =
   | 'IDLE'
@@ -28,6 +29,7 @@ export interface LiveBrewState {
   brew_number: number;
   paused: boolean;
   fault: string | null;
+  hardwareConnected?: boolean;
 }
 
 const INITIAL_SENSOR: SensorData = {
@@ -53,6 +55,7 @@ const INITIAL_STATE: LiveBrewState = {
   brew_number: 422,
   paused: false,
   fault: null,
+  hardwareConnected: false,
 };
 
 // ─── DEMO phase definitions (whole seconds, clearly visible) ──────────────────
@@ -226,6 +229,11 @@ export function useMachineState() {
 
   // ─── Start brew ────────────────────────────────────────────────────────────
   const startBrewSimulation = useCallback((pod_id: string, formulation_id: string) => {
+    // If ESP32 hardware is connected, trigger physical hardware brew
+    if (esp32Serial.isConnected()) {
+      esp32Serial.startBrew(400);
+    }
+
     stopTimer();
     phaseIdxRef.current     = 0;
     phaseElapsedRef.current = 0;
@@ -244,33 +252,36 @@ export function useMachineState() {
       sensor: { ...INITIAL_SENSOR, mass_g: 50 }, // starts low, fills up
     }));
 
-    timerRef.current = setInterval(() => {
-      setState((prev) => {
-        if (prev.paused) return prev;
+    // If hardware is NOT connected, run software timer simulation
+    if (!esp32Serial.isConnected()) {
+      timerRef.current = setInterval(() => {
+        setState((prev) => {
+          if (prev.paused) return prev;
 
-        phaseElapsedRef.current += 1;
-        totalElapsedRef.current += 1;
+          phaseElapsedRef.current += 1;
+          totalElapsedRef.current += 1;
 
-        const cur = DEMO_PHASES[phaseIdxRef.current];
-        if (!cur || cur.phase === 'COMPLETE') {
-          stopTimer();
-          return { ...prev, phase: 'COMPLETE', stage: 'READY', estimated_remaining_sec: 0 };
-        }
+          const cur = DEMO_PHASES[phaseIdxRef.current];
+          if (!cur || cur.phase === 'COMPLETE') {
+            stopTimer();
+            return { ...prev, phase: 'COMPLETE', stage: 'READY', estimated_remaining_sec: 0 };
+          }
 
-        // Phase finished? advance
-        if (phaseElapsedRef.current >= cur.durationSec) {
-          const patch = advancePhase(prev.sensor);
-          return patch ? { ...prev, ...patch } : prev;
-        }
+          // Phase finished? advance
+          if (phaseElapsedRef.current >= cur.durationSec) {
+            const patch = advancePhase(prev.sensor);
+            return patch ? { ...prev, ...patch } : prev;
+          }
 
-        return {
-          ...prev,
-          elapsed_sec: totalElapsedRef.current,
-          estimated_remaining_sec: Math.max(0, TOTAL_DEMO_SEC - totalElapsedRef.current),
-          sensor: evolveSensor(prev.sensor, cur.phase, phaseElapsedRef.current),
-        };
-      });
-    }, 1000);
+          return {
+            ...prev,
+            elapsed_sec: totalElapsedRef.current,
+            estimated_remaining_sec: Math.max(0, TOTAL_DEMO_SEC - totalElapsedRef.current),
+            sensor: evolveSensor(prev.sensor, cur.phase, phaseElapsedRef.current),
+          };
+        });
+      }, 1000);
+    }
   }, [stopTimer, advancePhase]);
 
   // ─── Skip current phase instantly ─────────────────────────────────────────
@@ -283,6 +294,9 @@ export function useMachineState() {
 
   // ─── Cleaning ──────────────────────────────────────────────────────────────
   const startCleaning = useCallback(() => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.startCleaning();
+    }
     stopTimer();
     setState((prev) => ({
       ...prev,
@@ -306,6 +320,9 @@ export function useMachineState() {
   }, [stopTimer]);
 
   const cancelBrew = useCallback(() => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.stopBrew();
+    }
     stopTimer();
     setState((prev) => ({
       ...prev,
@@ -317,6 +334,9 @@ export function useMachineState() {
   }, [stopTimer]);
 
   const setPaused = useCallback((paused: boolean) => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.togglePause();
+    }
     setState((prev) => ({ ...prev, paused }));
   }, []);
 
@@ -334,11 +354,60 @@ export function useMachineState() {
   }, []);
 
   const resetToIdle = useCallback(() => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.stopBrew();
+    }
     stopTimer();
     setState(INITIAL_STATE);
   }, [stopTimer]);
 
-  useEffect(() => () => stopTimer(), [stopTimer]);
+  // ─── Hardware Serial Telemetry Subscription ───────────────────────────────
+  useEffect(() => {
+    const unsubConn = esp32Serial.onConnectionChange((connected) => {
+      setState((prev) => ({ ...prev, hardwareConnected: connected }));
+    });
+
+    const unsubTelem = esp32Serial.onTelemetry((telemetry: ESP32Telemetry) => {
+      setState((prev) => {
+        // Map hardware phase name to BrewPhase
+        const pUpper = telemetry.phase.toUpperCase();
+        let mappedPhase: BrewPhase = prev.phase;
+        if (pUpper === 'WATER_FILL') mappedPhase = 'WATER_FILL';
+        else if (pUpper === 'SOAKING') mappedPhase = 'SOAKING';
+        else if (pUpper === 'HEATING') mappedPhase = 'HEATING';
+        else if (pUpper === 'STIRRING') mappedPhase = 'STIRRING';
+        else if (pUpper === 'REDUCTION') mappedPhase = 'REDUCTION';
+        else if (pUpper === 'FILTRATION') mappedPhase = 'FILTRATION';
+        else if (pUpper === 'DISPENSING') mappedPhase = 'DISPENSING';
+        else if (pUpper === 'READY' || pUpper === 'COMPLETE') mappedPhase = 'COMPLETE';
+        else if (pUpper === 'CLEANING') mappedPhase = 'CLEANING';
+        else if (pUpper === 'IDLE' && prev.phase !== 'IDLE') mappedPhase = 'IDLE';
+
+        return {
+          ...prev,
+          phase: mappedPhase,
+          stage: phaseToStage(mappedPhase),
+          elapsed_sec: telemetry.elapsed_sec,
+          paused: telemetry.paused,
+          hardwareConnected: true,
+          sensor: {
+            ...prev.sensor,
+            temperature_c: telemetry.temp_c,
+            mass_g: telemetry.water_ml,
+            heater: telemetry.heater,
+            pump: telemetry.pump,
+            stirrer: telemetry.stirrer,
+          },
+        };
+      });
+    });
+
+    return () => {
+      unsubConn();
+      unsubTelem();
+      stopTimer();
+    };
+  }, [stopTimer]);
 
   return {
     state,
