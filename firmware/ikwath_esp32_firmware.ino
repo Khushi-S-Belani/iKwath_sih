@@ -234,11 +234,11 @@ void resetAllActuators() {
 }
 
 // =============================================================================
-// TEMPERATURE & HUMIDITY READING (DHT11 - Sampled Every 1.5s)
+// TEMPERATURE & HUMIDITY READING (DHT11 - Sampled Every 1 Second)
 // =============================================================================
 void updateTemperature() {
   unsigned long now = millis();
-  if (now - lastTempReadTime < 1500) return; // DHT11 minimum refresh interval ~1.5s
+  if (now - lastTempReadTime < 1000) return; // Sampled every 1 second (1000ms)
   lastTempReadTime = now;
 
   float t = dht.readTemperature();

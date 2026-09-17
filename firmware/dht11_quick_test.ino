@@ -38,7 +38,7 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 unsigned long lastReadTime = 0;
-unsigned long readInterval = 2000; // DHT11 minimum sampling interval is 1-2 seconds
+unsigned long readInterval = 1000; // DHT11 sampling interval: 1 second
 int readCount = 0;
 int failCount = 0;
 
@@ -55,7 +55,7 @@ void setup() {
   
   Serial.println("[INFO] Sensor initialized.");
   Serial.println("[INFO] Note: DHT11 reads temperature (0-50°C) and humidity (20-90% RH).");
-  Serial.println("[INFO] Sampling every 2 seconds. Blow warm breath on sensor to test!");
+  Serial.println("[INFO] Sampling every 1 second. Blow warm breath on sensor to test!");
   Serial.println("--------------------------------------------------------\n");
 }
 

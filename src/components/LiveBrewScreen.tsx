@@ -26,7 +26,7 @@ function formatTime(sec: number): string {
 const STAGE_MICROCOPY: Record<string, string> = {
   WATER_FILL: 'Measuring water quantity via Load Cell / Flow Sensor.',
   SOAKING: 'Maintaining soak time as per formulation profile.',
-  HEATING: 'Induction heating with DS18B20 digital temperature feedback.',
+  HEATING: 'Induction heating with DHT11 digital temperature feedback.',
   STIRRING: 'Stirrer Servo agitating decoction at profile-based speed.',
   REDUCTION: 'Monitoring mass & temperature to target reduction endpoint.',
   FILTRATION: 'SS316 filter — separating spent coarse powder via bottom outlet.',
@@ -77,7 +77,7 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
           <div className="brew-temp-label">
             Temperature
             {(brewState.phase === 'HEATING' || brewState.phase === 'STIRRING') && (
-              <span className="brew-sensor-tag"> · DS18B20</span>
+              <span className="brew-sensor-tag"> · DHT11</span>
             )}
           </div>
           <div className="brew-temp-value">

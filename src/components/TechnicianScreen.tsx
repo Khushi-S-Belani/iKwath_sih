@@ -103,7 +103,7 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
 
   const ACTIONS = [
     { id: 'esp32-bridge', label: '⚡ Open ESP32 Live Hardware Modal', highlight: true },
-    { id: 'sim-temp', label: '🔥 Toggle DS18B20 Temp Simulation Mode', highlight: false },
+    { id: 'sim-temp', label: '🔥 Toggle DHT11 Temp Simulation Mode', highlight: false },
     { id: 'pump-prime', label: 'Pump prime / test (GPIO 26)', confirm: true },
     { id: 'stirrer-test', label: 'Stirrer Servo test (GPIO 13)', confirm: true },
     { id: 'pod-test', label: 'Pod Drop Flap Servo test (GPIO 14)', confirm: true },

@@ -191,7 +191,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                 )}
               </div>
               <div className="hw-modal-sub">
-                Live Actuator Drivers · 4x4 Keypad Matrix · DS18B20 Temp Probe · Flow Meter · Serial Monitor
+                Live Actuator Drivers · 4x4 Keypad Matrix · DHT11 Temp Sensor · Flow Meter · Serial Monitor
               </div>
             </div>
           </div>
@@ -693,15 +693,15 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                   <div className="hw-panel-title">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Sparkles style={{ width: 16, height: 16, color: '#34d399' }} />
-                      How to Test DS18B20 without a Lighter:
+                      How to Test DHT11 without a Heat Source:
                     </span>
                   </div>
                   <ul className="hw-panel-list">
                     <li>
-                      <strong style={{ color: '#6ee7b7' }}>Body Heat Test:</strong> Pinch and hold the metal sensor probe firmly between your fingers. You will see the temperature rise from <strong>~24°C → ~34°C</strong>!
+                      <strong style={{ color: '#6ee7b7' }}>Warm Breath Test:</strong> Gently blow warm breath onto the blue DHT11 grille. You will see both temperature (<strong>~24°C → ~33°C</strong>) and humidity (<strong>~50% → ~85%+ RH</strong>) rise immediately!
                     </li>
                     <li>
-                      <strong style={{ color: '#7dd3fc' }}>Warm Water Cup:</strong> Dip the waterproof probe in a cup of warm water to test higher ranges (50°C–70°C).
+                      <strong style={{ color: '#7dd3fc' }}>Finger Warmth:</strong> Hold or wrap your warm fingers close around the sensor casing.
                     </li>
                     <li>
                       <strong style={{ color: '#fcd34d' }}>Simulation Mode:</strong> Toggle software simulation to simulate the full <strong>25°C → 90°C</strong> heating curve automatically!
@@ -754,14 +754,14 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
               <div className="hw-metric-grid">
                 <div className="hw-tile">
                   <div className="hw-tile-top">
-                    <span>DS18B20 Temp</span>
+                    <span>DHT11 Temp</span>
                     <Flame style={{ width: 16, height: 16, color: '#fb923c' }} />
                   </div>
                   <div className="hw-tile-value">
                     {currentTemp.toFixed(1)} <span style={{ fontSize: 14, color: '#94a3b8' }}>°C</span>
                   </div>
                   <div className="hw-tile-sub" style={{ color: '#34d399' }}>
-                    {simTempActive ? 'Simulated Heating Curve' : 'DS18B20 Live Probe'}
+                    {simTempActive ? 'Simulated Heating Curve' : 'DHT11 Live Sensor'}
                   </div>
                 </div>
 
@@ -904,10 +904,10 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     <td>Physical recipe preset & actuator triggers.</td>
                   </tr>
                   <tr>
-                    <td><strong>DS18B20 Temp Probe</strong></td>
-                    <td><span className="hw-pin-tag">GPIO 19</span></td>
+                    <td><strong>DHT11 Temp & Humidity Sensor</strong></td>
+                    <td><span className="hw-pin-tag">GPIO 15</span></td>
                     <td>3.3V & GND</td>
-                    <td>Requires 4.7kΩ resistor between Data & 3.3V.</td>
+                    <td>Connect Data to GPIO 15, VCC to 3.3V, GND to GND.</td>
                   </tr>
                   <tr>
                     <td><strong>Push Button</strong></td>

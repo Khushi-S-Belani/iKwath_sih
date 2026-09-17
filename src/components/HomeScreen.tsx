@@ -110,7 +110,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <Flame style={{ width: 16, height: 16, color: '#fb923c', flexShrink: 0 }} />
           <div>
             <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              DS18B20 Temp
+              DHT11 Temp
             </div>
             <div style={{ fontSize: '15px', fontWeight: 800, color: '#fb923c' }}>
               {liveTemp.toFixed(1)} <span style={{ fontSize: '11px', fontWeight: 500 }}>°C</span>
