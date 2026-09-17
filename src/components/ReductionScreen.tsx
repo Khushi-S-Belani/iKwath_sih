@@ -27,9 +27,17 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
   return (
     <div className="screen-content reduction-screen">
       <div className="reduction-header">
-        <div className="reduction-title">MONITOR REDUCTION</div>
+        <div className="reduction-header-top">
+          <div className="reduction-title">MONITOR REDUCTION</div>
+          <div className="wf-kwatha-badge">
+            <span className="wf-kwatha-leaf">🌿</span>
+            <span className="wf-kwatha-tag-label">KWATHA:</span>
+            <span className="wf-kwatha-name">{formulation.name}</span>
+            <span className="wf-kwatha-id">[{formulation.pod_id}]</span>
+          </div>
+        </div>
         <div className="reduction-sub">
-          Load Cell + HX711 tracking mass loss to target endpoint — not a fixed timer.
+          Load Cell + HX711 tracking decoction mass loss to target <strong style={{ color: '#16A34A' }}>{formulation.reduction_endpoint_g}g</strong> endpoint for <strong style={{ color: 'var(--text-primary)' }}>{formulation.name}</strong>.
         </div>
       </div>
 

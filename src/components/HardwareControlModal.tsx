@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { esp32Serial, ESP32Telemetry } from '../services/esp32Serial';
+import React, { useState, useEffect, useRef } from 'react';
+import { esp32Serial, ESP32Telemetry, SerialLogEntry } from '../services/esp32Serial';
 import { 
   Cpu, 
   Usb, 
@@ -17,7 +17,9 @@ import {
   Square,
   RefreshCw,
   Thermometer,
-  Check
+  Check,
+  Terminal,
+  Grid
 } from 'lucide-react';
 
 interface HardwareControlModalProps {
@@ -40,10 +42,15 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
   const [connecting, setConnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'ds18b20' | 'telemetry' | 'actuators' | 'pinout'>('actuators');
+  const [activeTab, setActiveTab] = useState<'actuators' | 'keypad' | 'ds18b20' | 'telemetry' | 'terminal' | 'pinout'>('actuators');
+  const [logs, setLogs] = useState<SerialLogEntry[]>([]);
+  const [lastKeypadPress, setLastKeypadPress] = useState<{ key: string; time: string } | null>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsSupported(esp32Serial.isSupported());
+    setIsConnected(esp32Serial.isConnected());
+    setLogs(esp32Serial.getLogHistory());
 
     const unsubConn = esp32Serial.onConnectionChange((connected, info) => {
       setIsConnected(connected);
@@ -56,9 +63,22 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
       setSimTempActive(data.sim_mode);
     });
 
+    const unsubLog = esp32Serial.onLog((entry) => {
+      setLogs((prev) => [entry, ...prev.slice(0, 99)]);
+      if (entry.text.includes('"type":"keypad"')) {
+        try {
+          const match = entry.text.match(/"key":"(.)"/);
+          if (match && match[1]) {
+            setLastKeypadPress({ key: match[1], time: entry.time });
+          }
+        } catch (e) {}
+      }
+    });
+
     return () => {
       unsubConn();
       unsubTelem();
+      unsubLog();
     };
   }, []);
 
@@ -66,7 +86,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
 
   const showFeedback = (msg: string) => {
     setActionFeedback(msg);
-    setTimeout(() => setActionFeedback(null), 3000);
+    setTimeout(() => setActionFeedback(null), 3500);
   };
 
   const handleConnect = async () => {
@@ -74,7 +94,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
     setConnecting(true);
     try {
       await esp32Serial.connect();
-      showFeedback('ESP32 Connected! Built-in LED is ON (GPIO 2)');
+      showFeedback('ESP32 Connected! Built-in Blue LED is ON (GPIO 2)');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to connect to ESP32 serial port.');
     } finally {
@@ -94,16 +114,20 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
     showFeedback(`Temperature Simulation ${!simTempActive ? 'Enabled' : 'Disabled'}`);
   };
 
-  const handleActuatorAction = async (name: string, fn: () => any) => {
+  const handleActuatorAction = async (name: string, fn: () => Promise<boolean>) => {
     try {
-      await fn();
-      if (isConnected) {
-        showFeedback(`Command sent: ${name} ✔️`);
+      const ok = await fn();
+      if (ok) {
+        showFeedback(`Sent: ${name} ✔️`);
       } else {
-        showFeedback(`Simulated ${name} (Connect USB to trigger physical ESP32)`);
+        if (!isConnected) {
+          setErrorMsg(`Cannot send '${name}': ESP32 is not connected via USB. Click Connect above.`);
+        } else {
+          showFeedback(`Command sent: ${name}`);
+        }
       }
     } catch (e: any) {
-      setErrorMsg(`Error executing ${name}: ` + e.message);
+      setErrorMsg(`Error executing ${name}: ` + (e.message || e));
     }
   };
 
@@ -120,6 +144,33 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
 
   const thermal = getThermalStatus(currentTemp);
 
+  const KEYPAD_LAYOUT = [
+    [
+      { key: '1', label: '1: Ashwa', desc: '400mL / 90°C' },
+      { key: '2', label: '2: Giloy', desc: '350mL / 88°C' },
+      { key: '3', label: '3: Tulsi', desc: '450mL / 92°C' },
+      { key: 'A', label: 'A: Pump', desc: 'Toggle Pump', color: '#38bdf8' },
+    ],
+    [
+      { key: '4', label: '4: Beep', desc: 'Test Chime' },
+      { key: '5', label: '5: Polarity', desc: 'Invert Buzzer' },
+      { key: '6', label: '6: Pod 90°', desc: 'Open Flap' },
+      { key: 'B', label: 'B: Stirrer', desc: 'Toggle Agitator', color: '#c084fc' },
+    ],
+    [
+      { key: '7', label: '7: Pod 0°', desc: 'Close Flap' },
+      { key: '8', label: '8: Heater', desc: 'Toggle Relay', color: '#fb923c' },
+      { key: '9', label: '9: Spare', desc: 'Diagnostic' },
+      { key: 'C', label: 'C: Sim Temp', desc: 'Toggle Sim', color: '#34d399' },
+    ],
+    [
+      { key: '*', label: '*: Start/Pause', desc: 'Cycle Toggle', color: '#34d399' },
+      { key: '0', label: '0: Pod Drop', desc: 'Test Sweep' },
+      { key: '#', label: '#: Stop', desc: 'Emergency Reset', color: '#f43f5e' },
+      { key: 'D', label: 'D: Clean', desc: 'Rinse Cycle', color: '#60a5fa' },
+    ],
+  ];
+
   return (
     <div className="hw-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="hw-modal-window">
@@ -132,7 +183,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
             </div>
             <div>
               <div className="hw-modal-title">
-                ESP32 Hardware & DS18B20 Controller
+                ESP32 Hardware & Actuator Controller
                 {isConnected && (
                   <span className="hw-live-badge">
                     ● LIVE 115200 BAUD (LED ON)
@@ -140,7 +191,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                 )}
               </div>
               <div className="hw-modal-sub">
-                DS18B20 Temp Probe · Actuator Drivers · Flow Meter · Dual Simulation
+                Live Actuator Drivers · 4x4 Keypad Matrix · DS18B20 Temp Probe · Flow Meter · Serial Monitor
               </div>
             </div>
           </div>
@@ -163,16 +214,28 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
             <RotateCw style={{ width: 16, height: 16 }} /> Actuator Diagnostics
           </button>
           <button
+            onClick={() => setActiveTab('keypad')}
+            className={`hw-tab-btn green ${activeTab === 'keypad' ? 'active' : ''}`}
+          >
+            <Grid style={{ width: 16, height: 16 }} /> 4x4 Matrix Keypad
+          </button>
+          <button
             onClick={() => setActiveTab('ds18b20')}
             className={`hw-tab-btn orange ${activeTab === 'ds18b20' ? 'active' : ''}`}
           >
-            <Thermometer style={{ width: 16, height: 16 }} /> DS18B20 Temp Probe
+            <Thermometer style={{ width: 16, height: 16 }} /> {telemetry?.sensor_type ? `${telemetry.sensor_type} Temp Sensor` : 'DHT11 Temp Sensor'}
           </button>
           <button
             onClick={() => setActiveTab('telemetry')}
             className={`hw-tab-btn green ${activeTab === 'telemetry' ? 'active' : ''}`}
           >
             <Activity style={{ width: 16, height: 16 }} /> System Telemetry
+          </button>
+          <button
+            onClick={() => setActiveTab('terminal')}
+            className={`hw-tab-btn ${activeTab === 'terminal' ? 'active' : ''}`}
+          >
+            <Terminal style={{ width: 16, height: 16 }} /> Serial Terminal Log
           </button>
           <button
             onClick={() => setActiveTab('pinout')}
@@ -191,11 +254,11 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
               <div className={`hw-conn-dot ${isConnected ? 'connected' : ''}`} />
               <div>
                 <div className="hw-conn-name">
-                  {isConnected ? (portLabel || 'ESP32 Connected via USB Serial') : 'ESP32 Disconnected'}
+                  {isConnected ? (portLabel || 'ESP32 Connected via USB Serial (115200 Baud)') : 'ESP32 Disconnected'}
                 </div>
                 <div className="hw-conn-desc">
                   {isConnected 
-                    ? 'Built-in LED is ON (GPIO 2). Actuators ready for control.' 
+                    ? 'Built-in Blue LED is ON (GPIO 2). Web Serial bidirectional bridge active.' 
                     : 'Connect ESP32 to PC via USB cable and click Connect.'}
                 </div>
               </div>
@@ -234,12 +297,12 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
           {activeTab === 'actuators' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                Click any action below to test hardware actuators in real time:
+                Click any button below to directly trigger ESP32 hardware pins:
               </div>
 
               <div className="hw-actuator-grid">
                 
-                {/* Start Hardware Brew Sequence */}
+                {/* Full Automated Decoction Brew */}
                 <div className="hw-actuator-card">
                   <div className="hw-actuator-header">
                     <Play style={{ width: 16, height: 16, color: '#34d399' }} /> Full 11-Step Automated Decoction
@@ -248,9 +311,10 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     Runs full sequence: Pod Drop → Water Pump → Heat → Stir → Filter → Dispense.
                   </div>
                   <button
-                    onClick={() => handleActuatorAction('Start Brew', () => {
-                      esp32Serial.startBrew(400);
+                    onClick={() => handleActuatorAction('Start Brew', async () => {
+                      const res = await esp32Serial.startBrew(400);
                       if (onStartHardwareBrew) onStartHardwareBrew();
+                      return res;
                     })}
                     className="hw-actuator-btn primary"
                   >
@@ -261,10 +325,10 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                 {/* Emergency Stop */}
                 <div className="hw-actuator-card">
                   <div className="hw-actuator-header">
-                    <Square style={{ width: 16, height: 16, color: '#f43f5e' }} /> Stop / Reset Actuators
+                    <Square style={{ width: 16, height: 16, color: '#f43f5e' }} /> Emergency Stop / Reset
                   </div>
                   <div className="hw-actuator-desc">
-                    Instantly turns off heater relay, shuts down pump, and parks both servos.
+                    Instantly turns off heater relay, shuts down pump, silences buzzer, and parks servos.
                   </div>
                   <button 
                     onClick={() => handleActuatorAction('Emergency Stop', () => esp32Serial.stopBrew())} 
@@ -274,88 +338,227 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                   </button>
                 </div>
 
-                {/* Test Peristaltic Pump */}
-                <div className="hw-actuator-card">
-                  <div className="hw-actuator-header">
-                    <Droplets style={{ width: 16, height: 16, color: '#38bdf8' }} /> Peristaltic Pump (GPIO 26)
+                {/* Active Buzzer Controls */}
+                <div className="hw-actuator-card" style={{ gridColumn: 'span 2' }}>
+                  <div className="hw-actuator-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Volume2 style={{ width: 16, height: 16, color: '#2dd4bf' }} />
+                      <span>Active Buzzer (GPIO 25)</span>
+                    </div>
+                    {telemetry?.buzzer && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: telemetry.buzzer === 'ACTIVE' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(148, 163, 184, 0.2)', color: telemetry.buzzer === 'ACTIVE' ? '#34d399' : '#94a3b8', fontWeight: 700 }}>
+                        {telemetry.buzzer === 'ACTIVE' ? 'SOUND ACTIVE' : 'SILENT'} ({telemetry.buzzer_active_low ? 'Active-LOW' : 'Active-HIGH'})
+                      </span>
+                    )}
                   </div>
                   <div className="hw-actuator-desc">
-                    Toggles 12V/5V DC Pump MOSFET to test water suction & tubing flow.
+                    Dedicated ON/OFF sound toggles & module polarity inverter (supports 3-pin KY-012 modules).
                   </div>
-                  <button 
-                    onClick={() => handleActuatorAction('Toggle Pump', () => esp32Serial.testPump())} 
-                    className="hw-actuator-btn"
-                  >
-                    Toggle Peristaltic Pump ON/OFF
-                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Buzzer ON', () => esp32Serial.buzzerOn())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(52, 211, 153, 0.15)', borderColor: 'rgba(52, 211, 153, 0.4)', color: '#34d399' }}
+                    >
+                      Buzzer ON
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Buzzer OFF', () => esp32Serial.buzzerOff())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(244, 63, 94, 0.15)', borderColor: 'rgba(244, 63, 94, 0.4)', color: '#fda4af' }}
+                    >
+                      Buzzer OFF
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Beep 2x', () => esp32Serial.testBuzzer())} 
+                      className="hw-actuator-btn"
+                    >
+                      Beep 2x
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Invert Buzzer Polarity', () => esp32Serial.invertBuzzer())} 
+                      className="hw-actuator-btn"
+                      title="Toggle Active LOW vs Active HIGH logic"
+                    >
+                      Invert Polarity
+                    </button>
+                  </div>
                 </div>
 
-                {/* Test Stirrer Servo */}
+                {/* Peristaltic Pump */}
                 <div className="hw-actuator-card">
-                  <div className="hw-actuator-header">
-                    <RotateCw style={{ width: 16, height: 16, color: '#c084fc' }} /> Stirrer Servo 1 (GPIO 13)
+                  <div className="hw-actuator-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Droplets style={{ width: 16, height: 16, color: '#38bdf8' }} />
+                      <span>Pump (GPIO 26)</span>
+                    </div>
+                    {telemetry?.pump && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: telemetry.pump === 'ACTIVE' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(148, 163, 184, 0.2)', color: telemetry.pump === 'ACTIVE' ? '#38bdf8' : '#94a3b8', fontWeight: 700 }}>
+                        {telemetry.pump}
+                      </span>
+                    )}
                   </div>
                   <div className="hw-actuator-desc">
-                    Starts/stops 30° ↔ 150° continuous oscillation agitator in vessel.
+                    Peristaltic 6mm water intake / dispensing pump.
                   </div>
-                  <button 
-                    onClick={() => handleActuatorAction('Toggle Stirrer', () => esp32Serial.testStirrer())} 
-                    className="hw-actuator-btn"
-                  >
-                    Toggle Stirrer Oscillation
-                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Pump ON', () => esp32Serial.pumpOn())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(56, 189, 248, 0.15)', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+                    >
+                      Pump ON
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Pump OFF', () => esp32Serial.pumpOff())} 
+                      className="hw-actuator-btn"
+                    >
+                      Pump OFF
+                    </button>
+                  </div>
                 </div>
 
-                {/* Test Pod Drop Flap Servo */}
+                {/* Hall Flow Sensor (GPIO 18) */}
+                <div className="hw-actuator-card">
+                  <div className="hw-actuator-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Activity style={{ width: 16, height: 16, color: '#34d399' }} />
+                      <span>Flow Sensor (GPIO 18)</span>
+                    </div>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(52, 211, 153, 0.2)', color: '#34d399', fontWeight: 700 }}>
+                      {telemetry?.flow_rate_lpm ? `${telemetry.flow_rate_lpm.toFixed(2)} L/min` : 'IDLE (0.0 L/min)'}
+                    </span>
+                  </div>
+                  <div className="hw-actuator-desc">
+                    Volume: <strong style={{ color: '#34d399' }}>{telemetry?.water_ml?.toFixed(1) ?? 0} mL</strong> · Pulses: <strong style={{ color: '#e2e8f0' }}>{telemetry?.flow_pulses ?? 0}</strong>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Reset Flow Volume', () => esp32Serial.resetFlowCount())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(52, 211, 153, 0.15)', borderColor: 'rgba(52, 211, 153, 0.4)', color: '#34d399' }}
+                    >
+                      Reset Volume
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Pump 50mL Test', async () => {
+                        await esp32Serial.pumpOn();
+                        setTimeout(() => esp32Serial.pumpOff(), 3000);
+                        return true;
+                      })} 
+                      className="hw-actuator-btn"
+                    >
+                      3s Flow Test
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stirrer Servo 1 */}
+                <div className="hw-actuator-card">
+                  <div className="hw-actuator-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <RotateCw style={{ width: 16, height: 16, color: '#c084fc' }} />
+                      <span>Stirrer Servo 1 (GPIO 13)</span>
+                    </div>
+                    {telemetry?.stirrer && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: telemetry.stirrer === 'ACTIVE' ? 'rgba(192, 132, 252, 0.2)' : 'rgba(148, 163, 184, 0.2)', color: telemetry.stirrer === 'ACTIVE' ? '#c084fc' : '#94a3b8', fontWeight: 700 }}>
+                        {telemetry.stirrer} ({telemetry.stirrer_deg}°)
+                      </span>
+                    )}
+                  </div>
+                  <div className="hw-actuator-desc">
+                    Oscillating sweep decoction agitator (30° ↔ 150°).
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Stirrer ON', () => esp32Serial.stirrerOn())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(192, 132, 252, 0.15)', borderColor: 'rgba(192, 132, 252, 0.4)', color: '#c084fc' }}
+                    >
+                      Start Sweep
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Stirrer OFF', () => esp32Serial.stirrerOff())} 
+                      className="hw-actuator-btn"
+                    >
+                      Stop Stirrer
+                    </button>
+                  </div>
+                </div>
+
+                {/* Pod Dispenser Servo 2 */}
                 <div className="hw-actuator-card">
                   <div className="hw-actuator-header">
                     <Layers style={{ width: 16, height: 16, color: '#fbbf24' }} /> Pod Dispenser Servo 2 (GPIO 14)
                   </div>
                   <div className="hw-actuator-desc">
-                    Rotates pod drop flap 90° for 1.5s, then returns to 0° home position.
+                    Herbal pod hopper flap (0° closed ↔ 90° drop).
                   </div>
-                  <button 
-                    onClick={() => handleActuatorAction('Test Pod Flap', () => esp32Serial.testPodFlap())} 
-                    className="hw-actuator-btn"
-                  >
-                    Test Pod Drop Sweep (0° → 90° → 0°)
-                  </button>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Open Pod (90°)', () => esp32Serial.podOpen())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(251, 191, 36, 0.15)', borderColor: 'rgba(251, 191, 36, 0.4)', color: '#fbbf24' }}
+                    >
+                      Open 90°
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Close Pod (0°)', () => esp32Serial.podClose())} 
+                      className="hw-actuator-btn"
+                    >
+                      Close 0°
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Test Drop Sweep', () => esp32Serial.testPodFlap())} 
+                      className="hw-actuator-btn"
+                    >
+                      Sweep Test
+                    </button>
+                  </div>
                 </div>
 
-                {/* Test Heater Relay */}
+                {/* Heater Relay */}
                 <div className="hw-actuator-card">
-                  <div className="hw-actuator-header">
-                    <Flame style={{ width: 16, height: 16, color: '#fb923c' }} /> Heater Relay (GPIO 27)
+                  <div className="hw-actuator-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Flame style={{ width: 16, height: 16, color: '#fb923c' }} />
+                      <span>Heater Relay (GPIO 27)</span>
+                    </div>
+                    {telemetry?.heater && (
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: telemetry.heater === 'ACTIVE' ? 'rgba(251, 146, 60, 0.2)' : 'rgba(148, 163, 184, 0.2)', color: telemetry.heater === 'ACTIVE' ? '#fb923c' : '#94a3b8', fontWeight: 700 }}>
+                        {telemetry.heater} ({telemetry.relay_active_low !== false ? 'Active-LOW' : 'Active-HIGH'})
+                      </span>
+                    )}
                   </div>
                   <div className="hw-actuator-desc">
-                    Toggles 5V Relay coil (clicks relay to test heating load circuit).
+                    5V Relay coil controlling the heating element.
                   </div>
-                  <button 
-                    onClick={() => handleActuatorAction('Toggle Heater Relay', () => esp32Serial.testRelay())} 
-                    className="hw-actuator-btn"
-                  >
-                    Toggle Heater Relay ON/OFF
-                  </button>
-                </div>
-
-                {/* Test Buzzer */}
-                <div className="hw-actuator-card">
-                  <div className="hw-actuator-header">
-                    <Volume2 style={{ width: 16, height: 16, color: '#2dd4bf' }} /> Active Buzzer (GPIO 25)
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 4 }}>
+                    <button 
+                      onClick={() => handleActuatorAction('Heater ON', () => esp32Serial.relayOn())} 
+                      className="hw-actuator-btn"
+                      style={{ background: 'rgba(251, 146, 60, 0.15)', borderColor: 'rgba(251, 146, 60, 0.4)', color: '#fb923c' }}
+                    >
+                      Relay ON
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Heater OFF', () => esp32Serial.relayOff())} 
+                      className="hw-actuator-btn"
+                    >
+                      Relay OFF
+                    </button>
+                    <button 
+                      onClick={() => handleActuatorAction('Invert Relay Polarity', () => esp32Serial.invertRelay())} 
+                      className="hw-actuator-btn"
+                      title="Toggle Active LOW vs Active HIGH logic"
+                    >
+                      Invert Polarity
+                    </button>
                   </div>
-                  <div className="hw-actuator-desc">
-                    Plays dual-beep audio notification chime on piezo buzzer.
-                  </div>
-                  <button 
-                    onClick={() => handleActuatorAction('Beep Buzzer', () => esp32Serial.testBuzzer())} 
-                    className="hw-actuator-btn"
-                  >
-                    Beep Buzzer
-                  </button>
                 </div>
 
                 {/* Test Cleaning Cycle */}
-                <div className="hw-actuator-card">
+                <div className="hw-actuator-card" style={{ gridColumn: 'span 2' }}>
                   <div className="hw-actuator-header">
                     <RefreshCw style={{ width: 16, height: 16, color: '#60a5fa' }} /> Automatic Flush & Cleaning
                   </div>
@@ -374,7 +577,59 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
             </div>
           )}
 
-          {/* TAB 1: DS18B20 SPECIALIZED PROBE VIEW */}
+          {/* TAB 1: 4x4 KEYPAD MATRIX VIEW */}
+          {activeTab === 'keypad' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                  Physical 4x4 Matrix Keypad Map & Live Input Monitor:
+                </div>
+                {lastKeypadPress && (
+                  <div style={{ padding: '4px 12px', borderRadius: 6, background: 'rgba(52, 211, 153, 0.2)', border: '1px solid rgba(52, 211, 153, 0.4)', color: '#34d399', fontSize: 12, fontWeight: 700 }}>
+                    Last Key Pressed: <span style={{ fontSize: 16 }}>'{lastKeypadPress.key}'</span> @ {lastKeypadPress.time}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {KEYPAD_LAYOUT.flat().map((item) => {
+                  const isPressed = lastKeypadPress?.key === item.key;
+                  return (
+                    <div 
+                      key={item.key}
+                      style={{
+                        padding: '12px 10px',
+                        background: isPressed ? 'rgba(52, 211, 153, 0.25)' : '#090d16',
+                        border: isPressed ? '2px solid #34d399' : '1px solid #1e293b',
+                        borderRadius: 10,
+                        textAlign: 'center',
+                        transition: 'all 0.2s ease',
+                        boxShadow: isPressed ? '0 0 15px rgba(52, 211, 153, 0.4)' : 'none',
+                      }}
+                    >
+                      <div style={{ fontSize: 22, fontWeight: 800, color: item.color || '#f8fafc', marginBottom: 2 }}>
+                        {item.key}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1' }}>
+                        {item.label}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+                        {item.desc}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ padding: '12px 16px', background: '#090d16', border: '1px solid #1e293b', borderRadius: 10, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+                <strong style={{ color: '#f8fafc' }}>Keypad GPIO Pinout:</strong><br />
+                • <strong>Rows (R1–R4):</strong> GPIO 32, GPIO 33, GPIO 23, GPIO 22<br />
+                • <strong>Columns (C1–C4):</strong> GPIO 21, GPIO 17, GPIO 16, GPIO 5
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: DS18B20 SPECIALIZED PROBE VIEW */}
           {activeTab === 'ds18b20' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               
@@ -383,7 +638,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                 <div className="hw-temp-top">
                   <div className="hw-temp-pin-label">
                     <Thermometer style={{ width: 16, height: 16 }} />
-                    DS18B20 OneWire Temperature Probe (GPIO 19)
+                    {telemetry?.sensor_type ? `${telemetry.sensor_type} Temperature Sensor (GPIO 15)` : 'DHT11 Temperature & Humidity Sensor (GPIO 15)'}
                   </div>
                   
                   <span 
@@ -407,7 +662,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                   <div className="hw-mode-source-block">
                     <div className="hw-mode-source-label">Mode Source:</div>
                     <div className="hw-mode-source-val">
-                      {simTempActive ? '⚡ Dynamic Simulation Engine' : '📡 Physical DS18B20 Sensor'}
+                      {simTempActive ? '⚡ Dynamic Simulation Engine' : `📡 Physical ${telemetry?.sensor_type || 'DHT11'} Sensor`}
                     </div>
                   </div>
                 </div>
@@ -488,19 +743,10 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
 
               </div>
 
-              {/* Standalone Diagnostic Tool Note */}
-              <div style={{ padding: '10px 16px', background: '#090d16', border: '1px solid #1e293b', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <CheckCircle2 style={{ width: 16, height: 16, color: '#34d399' }} />
-                  <span>Standalone Diagnostic Sketch: <code style={{ color: '#34d399' }}>firmware/ds18b20_quick_test.ino</code></span>
-                </div>
-                <span style={{ color: '#64748b' }}>OneWire Pin: GPIO 19 + 4.7kΩ Pullup</span>
-              </div>
-
             </div>
           )}
 
-          {/* TAB 2: FULL TELEMETRY */}
+          {/* TAB 3: FULL TELEMETRY */}
           {activeTab === 'telemetry' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               
@@ -576,8 +822,8 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     <strong style={{ color: telemetry?.stirrer === 'ACTIVE' ? '#c084fc' : '#64748b' }}>{telemetry?.stirrer || 'OFF'}</strong>
                   </div>
                   <div style={{ padding: '10px 14px', borderRadius: 8, background: '#090d16', border: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                    <span style={{ color: '#94a3b8' }}>Button (4)</span>
-                    <strong style={{ color: '#34d399' }}>READY</strong>
+                    <span style={{ color: '#94a3b8' }}>Buzzer (25)</span>
+                    <strong style={{ color: telemetry?.buzzer === 'ACTIVE' ? '#34d399' : '#64748b' }}>{telemetry?.buzzer || 'OFF'}</strong>
                   </div>
                 </div>
               </div>
@@ -585,7 +831,54 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: PINOUT & WIRING */}
+          {/* TAB 4: LIVE SERIAL TERMINAL MONITOR */}
+          {activeTab === 'terminal' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#94a3b8' }}>
+                <span>Real-time USB Serial stream (115200 Baud):</span>
+                <span style={{ color: '#64748b' }}>{logs.length} packet(s) logged</span>
+              </div>
+
+              <div 
+                ref={logContainerRef}
+                style={{
+                  height: 320,
+                  overflowY: 'auto',
+                  background: '#040711',
+                  border: '1px solid #1e293b',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                }}
+              >
+                {logs.length === 0 ? (
+                  <div style={{ color: '#64748b', fontStyle: 'italic' }}>No serial packets recorded yet. Connect ESP32 to start streaming.</div>
+                ) : (
+                  logs.map((l, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, lineHeight: 1.4 }}>
+                      <span style={{ color: '#64748b' }}>[{l.time}]</span>
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: l.direction === 'TX' ? '#38bdf8' : l.direction === 'RX' ? '#34d399' : '#fbbf24',
+                        minWidth: 28 
+                      }}>
+                        {l.direction}:
+                      </span>
+                      <span style={{ color: l.direction === 'TX' ? '#bae6fd' : l.direction === 'RX' ? '#a7f3d0' : '#fef08a', wordBreak: 'break-all' }}>
+                        {l.text}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: PINOUT & WIRING */}
           {activeTab === 'pinout' && (
             <div className="hw-table-wrap">
               <table className="hw-table">
@@ -605,9 +898,15 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     <td>Turns ON when connected to Web Serial.</td>
                   </tr>
                   <tr>
-                    <td><strong>DS18B20 Temp</strong></td>
+                    <td><strong>4x4 Matrix Keypad</strong></td>
+                    <td><span className="hw-pin-tag">R: 32,33,23,22 | C: 21,17,16,5</span></td>
+                    <td>Internal Pull-ups</td>
+                    <td>Physical recipe preset & actuator triggers.</td>
+                  </tr>
+                  <tr>
+                    <td><strong>DS18B20 Temp Probe</strong></td>
                     <td><span className="hw-pin-tag">GPIO 19</span></td>
-                    <td>3.3V / 5V</td>
+                    <td>3.3V & GND</td>
                     <td>Requires 4.7kΩ resistor between Data & 3.3V.</td>
                   </tr>
                   <tr>
@@ -620,7 +919,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     <td><strong>Peristaltic Pump</strong></td>
                     <td><span className="hw-pin-tag">GPIO 26</span></td>
                     <td>Ext 12V/5V</td>
-                    <td>Driven via MOSFET (IRF520) or Relay Ch 1.</td>
+                    <td>Driven via MOSFET (IRF520) or Relay.</td>
                   </tr>
                   <tr>
                     <td><strong>Flow Sensor (6mm)</strong></td>
@@ -631,26 +930,26 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                   <tr>
                     <td><strong>Servo 1 (Stirrer)</strong></td>
                     <td><span className="hw-pin-tag">GPIO 13</span></td>
-                    <td>Ext 5V</td>
+                    <td>VIN (5V) & GND</td>
                     <td>Oscillates 30° ↔ 150° during decoction.</td>
                   </tr>
                   <tr>
                     <td><strong>Servo 2 (Pod Flap)</strong></td>
                     <td><span className="hw-pin-tag">GPIO 14</span></td>
-                    <td>Ext 5V</td>
+                    <td>VIN (5V) & GND</td>
                     <td>Rotates 0° ↔ 90° to dispense herbal pod.</td>
                   </tr>
                   <tr>
                     <td><strong>Heater Relay</strong></td>
                     <td><span className="hw-pin-tag">GPIO 27</span></td>
-                    <td>5V (Vin)</td>
+                    <td>VIN (5V) & GND</td>
                     <td>Active LOW relay triggers heater element.</td>
                   </tr>
                   <tr>
                     <td><strong>Active Buzzer</strong></td>
                     <td><span className="hw-pin-tag">GPIO 25</span></td>
-                    <td>GND</td>
-                    <td>Beeps on Start, Step changes, and Alerts.</td>
+                    <td>3.3V / 5V & GND</td>
+                    <td>Active-LOW & HIGH polarity support.</td>
                   </tr>
                 </tbody>
               </table>

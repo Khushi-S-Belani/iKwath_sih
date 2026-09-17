@@ -7,8 +7,8 @@
   WIRING:
   - RED wire (VCC)    -> ESP32 3.3V (or 5V)
   - BLACK wire (GND)  -> ESP32 GND
-  - YELLOW wire (DATA)-> ESP32 GPIO 19
-  - 4.7kΩ Resistor    -> Between VCC (3.3V) and DATA (GPIO 19)
+  - YELLOW wire (DATA)-> ESP32 GPIO 15 (Adjacent to GND & 3.3V)
+  - 4.7kΩ Resistor    -> Between VCC (3.3V) and DATA (GPIO 15)
   
   HOW TO TEST WITHOUT A LIGHTER / FLAME:
   1. Touch and hold the metal sensor probe firmly in your hand/fingers.
@@ -21,7 +21,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define ONE_WIRE_BUS 19 // GPIO 19 on ESP32
+#define ONE_WIRE_BUS 15 // GPIO 15 on ESP32 (Adjacent to GND & 3V3)
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);

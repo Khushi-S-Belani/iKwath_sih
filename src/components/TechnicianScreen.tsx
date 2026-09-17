@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusChip } from './StatusChip';
 import { AlertBanner } from './AlertBanner';
-import { esp32Serial } from '../services/esp32Serial';
+import { esp32Serial, ESP32Telemetry } from '../services/esp32Serial';
 
 interface SubsystemRow {
   name: string;
@@ -10,18 +10,6 @@ interface SubsystemRow {
   notes?: string;
 }
 
-const SUBSYSTEMS: SubsystemRow[] = [
-  { name: 'DS18B20 Temp Sensor', state: 'CONNECTED', variant: 'connected' },
-  { name: 'Flow Sensor (6mm)', state: 'CONNECTED', variant: 'connected' },
-  { name: 'Heater Relay (GPIO 27)', state: 'OFF', variant: 'off' },
-  { name: 'Stirrer Servo 1 (GPIO 13)', state: 'OFF', variant: 'off' },
-  { name: 'Peristaltic Pump (GPIO 26)', state: 'OFF', variant: 'off' },
-  { name: 'Pod Flap Servo 2 (GPIO 14)', state: 'CLOSED', variant: 'off' },
-  { name: 'Active Buzzer (GPIO 25)', state: 'READY', variant: 'connected' },
-  { name: 'Start Push Button (GPIO 4)', state: 'READY', variant: 'connected' },
-  { name: 'ESP32 Controller', state: 'ONLINE', variant: 'active' },
-];
-
 interface TechnicianScreenProps {
   onOpenHardwareModal?: () => void;
 }
@@ -29,6 +17,23 @@ interface TechnicianScreenProps {
 export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwareModal }) => {
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [runLog, setRunLog] = useState<string[]>([]);
+  const [isConnected, setIsConnected] = useState(esp32Serial.isConnected());
+  const [telemetry, setTelemetry] = useState<ESP32Telemetry | null>(esp32Serial.getLatestTelemetry());
+
+  useEffect(() => {
+    const unsubConn = esp32Serial.onConnectionChange((connected) => {
+      setIsConnected(connected);
+    });
+
+    const unsubTelem = esp32Serial.onTelemetry((data) => {
+      setTelemetry(data);
+    });
+
+    return () => {
+      unsubConn();
+      unsubTelem();
+    };
+  }, []);
 
   const runTest = async (action: string) => {
     setConfirmAction(null);
@@ -40,9 +45,61 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
       else if (action.includes('Buzzer')) await esp32Serial.testBuzzer();
       else if (action.includes('Pod')) await esp32Serial.testPodFlap();
       else if (action.includes('Simulate')) await esp32Serial.toggleTempSimulation();
+      setRunLog((prev) => [`[${new Date().toLocaleTimeString()}] ${action} — sent to ESP32 ✔️`, ...prev.slice(0, 19)]);
+    } else {
+      setRunLog((prev) => [`[${new Date().toLocaleTimeString()}] ${action} (ESP32 not connected - standalone mode)`, ...prev.slice(0, 19)]);
     }
-    setRunLog((prev) => [`[${new Date().toLocaleTimeString()}] ${action} — executed OK`, ...prev]);
   };
+
+  const subsystems: SubsystemRow[] = [
+    {
+      name: telemetry?.sensor_type ? `${telemetry.sensor_type} Temp Sensor (GPIO 15)` : 'DHT11 Temp Sensor (GPIO 15)',
+      state: telemetry
+        ? `${telemetry.temp_c.toFixed(1)}°C ${telemetry.humidity !== undefined ? `| ${telemetry.humidity.toFixed(0)}% RH` : ''} (${telemetry.sim_mode ? 'Simulated' : 'Physical'})`
+        : isConnected ? 'CONNECTED (25.0°C)' : 'STANDALONE',
+      variant: telemetry ? (telemetry.temp_c > 40 ? 'warning' : 'connected') : 'info',
+    },
+    {
+      name: 'Flow Sensor 6mm (GPIO 18)',
+      state: telemetry ? `${telemetry.water_ml.toFixed(0)} mL (Target: ${telemetry.target_water_ml} mL)` : 'READY',
+      variant: 'connected',
+    },
+    {
+      name: 'Heater Relay (GPIO 27)',
+      state: telemetry?.heater === 'ACTIVE' ? 'ACTIVE (RELAY ON)' : 'OFF',
+      variant: telemetry?.heater === 'ACTIVE' ? 'active' : 'off',
+    },
+    {
+      name: 'Stirrer Servo 1 (GPIO 13)',
+      state: telemetry?.stirrer === 'ACTIVE' ? `ACTIVE (${telemetry.stirrer_deg}°)` : `PARKED (${telemetry?.stirrer_deg ?? 30}°)`,
+      variant: telemetry?.stirrer === 'ACTIVE' ? 'active' : 'off',
+    },
+    {
+      name: 'Peristaltic Pump (GPIO 26)',
+      state: telemetry?.pump === 'ACTIVE' ? 'ACTIVE (PUMPING)' : 'OFF',
+      variant: telemetry?.pump === 'ACTIVE' ? 'active' : 'off',
+    },
+    {
+      name: 'Pod Flap Servo 2 (GPIO 14)',
+      state: telemetry?.pod_deg && telemetry.pod_deg > 0 ? `OPEN (${telemetry.pod_deg}°)` : 'CLOSED (0°)',
+      variant: telemetry?.pod_deg && telemetry.pod_deg > 0 ? 'active' : 'off',
+    },
+    {
+      name: 'Active Buzzer (GPIO 25)',
+      state: telemetry?.buzzer === 'ACTIVE' ? 'SOUND ACTIVE' : 'READY (SILENT)',
+      variant: telemetry?.buzzer === 'ACTIVE' ? 'warning' : 'connected',
+    },
+    {
+      name: 'Start Push Button (GPIO 4)',
+      state: 'READY (PULL-UP)',
+      variant: 'connected',
+    },
+    {
+      name: 'ESP32 Controller',
+      state: isConnected ? 'LIVE @ 115200 BAUD' : 'OFFLINE (CLICK TO CONNECT)',
+      variant: isConnected ? 'active' : 'off',
+    },
+  ];
 
   const ACTIONS = [
     { id: 'esp32-bridge', label: '⚡ Open ESP32 Live Hardware Modal', highlight: true },
@@ -53,7 +110,6 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
     { id: 'heater-test', label: 'Heater Relay test (GPIO 27)', confirm: true },
     { id: 'buzzer-test', label: 'Active Buzzer chime test (GPIO 25)', confirm: true },
     { id: 'rinse-test', label: 'Rinse & Flush cycle', confirm: true },
-    { id: 'sensor-diag', label: 'Flow & Temp Sensor diagnostics', confirm: true },
   ];
 
   return (
@@ -72,9 +128,14 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
       <div className="tech-layout">
         {/* Subsystem Health */}
         <div className="tech-subsystems">
-          <div className="tech-section-title">Hardware Subsystem Health</div>
+          <div className="tech-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Hardware Subsystem Health</span>
+            {isConnected && (
+              <span style={{ fontSize: '11px', color: '#34d399', fontWeight: 700 }}>● ESP32 TELEMETRY LIVE</span>
+            )}
+          </div>
           <div className="tech-subsystem-grid">
-            {SUBSYSTEMS.map((s) => (
+            {subsystems.map((s) => (
               <div key={s.name} className="tech-subsystem-row">
                 <span className="tech-subsystem-name">{s.name}</span>
                 <StatusChip label={s.state} variant={s.variant} size="sm" />

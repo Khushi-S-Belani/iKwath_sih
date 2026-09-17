@@ -29,7 +29,8 @@ export interface LiveBrewState {
   brew_number: number;
   paused: boolean;
   fault: string | null;
-  hardwareConnected?: boolean;
+  hardwareConnected: boolean;
+  hardwareTelemetry: ESP32Telemetry | null;
 }
 
 const INITIAL_SENSOR: SensorData = {
@@ -56,40 +57,38 @@ const INITIAL_STATE: LiveBrewState = {
   paused: false,
   fault: null,
   hardwareConnected: false,
+  hardwareTelemetry: null,
 };
 
 // ─── DEMO phase definitions (whole seconds, clearly visible) ──────────────────
 const DEMO_PHASES: { phase: BrewPhase; durationSec: number }[] = [
-  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — load cell measuring water quantity
+  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — load cell / flow sensor measuring water
   { phase: 'SOAKING',    durationSec: 10 },  // 10 s — soak time per formulation
-  { phase: 'HEATING',    durationSec: 10 },  // 10 s — induction heating + PT100 feedback
-  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — stepper motor stirring during extraction
-  { phase: 'REDUCTION',  durationSec: 12 },  // 12 s — mass-driven endpoint detection
+  { phase: 'HEATING',    durationSec: 10 },  // 10 s — induction heating + DS18B20 feedback
+  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — agitator stirring during extraction
+  { phase: 'REDUCTION',  durationSec: 12 },  // 12 s — mass & volume endpoint detection
   { phase: 'FILTRATION', durationSec:  8 },  //  8 s — SS316 filter, bottom outlet
   { phase: 'DISPENSING', durationSec:  6 },  //  6 s — peristaltic pump dispense
   { phase: 'COMPLETE',   durationSec:  0 },
 ];
 const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 64 s
 
-// ─── Sensor evolution per phase ───────────────────────────────────────────────
+// ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
 function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): SensorData {
   const s = { ...prev };
 
   switch (phase) {
     case 'WATER_FILL':
-      // Load Cell + HX711 measuring water fill — heating off, no stirring
       s.heater = 'OFF';
       s.stirrer = 'OFF';
-      s.pump = 'OFF';
+      s.pump = 'ACTIVE';
       s.product_valve = 'CLOSED';
       s.drain_valve = 'CLOSED';
       s.temperature_c = 24 + (Math.random() - 0.5) * 0.3;
-      // Mass rises as water fills (simulate water inlet)
       s.mass_g = Math.min(400, 50 + elapsed * 44 + (Math.random() - 0.5) * 2);
       break;
 
     case 'SOAKING':
-      // Maintain soak time per formulation — gentle warm-up
       s.heater = 'ACTIVE';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
@@ -98,7 +97,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'HEATING':
-      // Induction heating + PT100 temperature feedback — no stirring yet
       s.heater = 'ACTIVE';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
@@ -107,7 +105,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'STIRRING':
-      // Stepper motor stirring during extraction at profile-based speed
       s.heater = 'ACTIVE';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
@@ -116,7 +113,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'REDUCTION':
-      // Load Cell + HX711 monitoring mass loss to target endpoint
       s.heater = 'ACTIVE';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
@@ -125,7 +121,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'FILTRATION':
-      // SS316 removable filter — bottom outlet active
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -135,7 +130,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'DISPENSING':
-      // Peristaltic pump + valve — controlled and complete dispensing
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -145,7 +139,6 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       break;
 
     case 'CLEANING':
-      // Washable flow path + filter rinse
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
@@ -197,7 +190,7 @@ export function useMachineState() {
   const [state, setState] = useState<LiveBrewState>(INITIAL_STATE);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Mutable refs — allow skipPhase to read/write without stale closures
+  // Mutable refs for state tracking
   const phaseIdxRef     = useRef(0);
   const phaseElapsedRef = useRef(0);
   const totalElapsedRef = useRef(0);
@@ -227,17 +220,22 @@ export function useMachineState() {
     };
   }, [stopTimer]);
 
-  // ─── Start brew ────────────────────────────────────────────────────────────
-  const startBrewSimulation = useCallback((pod_id: string, formulation_id: string) => {
-    // If ESP32 hardware is connected, trigger physical hardware brew
-    if (esp32Serial.isConnected()) {
-      esp32Serial.startBrew(400);
-    }
-
+  // ─── Start brew (Physical ESP32 + Software fallback) ───────────────────────
+  const startBrewSimulation = useCallback((
+    pod_id: string,
+    formulation_id: string,
+    waterMl: number = 400,
+    tempC: number = 90
+  ) => {
     stopTimer();
     phaseIdxRef.current     = 0;
     phaseElapsedRef.current = 0;
     totalElapsedRef.current = 0;
+
+    // Trigger physical hardware brew if ESP32 connected
+    if (esp32Serial.isConnected()) {
+      esp32Serial.startBrew(waterMl, tempC);
+    }
 
     setState((prev) => ({
       ...prev,
@@ -249,7 +247,7 @@ export function useMachineState() {
       formulation_id,
       paused: false,
       fault: null,
-      sensor: { ...INITIAL_SENSOR, mass_g: 50 }, // starts low, fills up
+      sensor: { ...INITIAL_SENSOR, mass_g: 0, target_mass_g: Math.round(waterMl * 0.25) },
     }));
 
     // If hardware is NOT connected, run software timer simulation
@@ -310,7 +308,7 @@ export function useMachineState() {
         ...prev,
         phase: 'READY',
         stage: 'READY',
-        sensor: { ...INITIAL_SENSOR, temperature_c: 24, cleaning_required: false },
+        sensor: { ...INITIAL_SENSOR, temperature_c: prev.sensor.temperature_c, cleaning_required: false },
         pod_id: null,
         formulation_id: null,
         elapsed_sec: 0,
@@ -350,7 +348,7 @@ export function useMachineState() {
     }));
     setTimeout(() => {
       setState((prev) => ({ ...prev, phase: 'DETECTED' }));
-    }, 2000);
+    }, 1500);
   }, []);
 
   const resetToIdle = useCallback(() => {
@@ -361,7 +359,7 @@ export function useMachineState() {
     setState(INITIAL_STATE);
   }, [stopTimer]);
 
-  // ─── Hardware Serial Telemetry Subscription ───────────────────────────────
+  // ─── Hardware Serial Telemetry Subscription & Real-Time Sync ───────────────
   useEffect(() => {
     const unsubConn = esp32Serial.onConnectionChange((connected) => {
       setState((prev) => ({ ...prev, hardwareConnected: connected }));
@@ -370,9 +368,11 @@ export function useMachineState() {
     const unsubTelem = esp32Serial.onTelemetry((telemetry: ESP32Telemetry) => {
       setState((prev) => {
         // Map hardware phase name to BrewPhase
-        const pUpper = telemetry.phase.toUpperCase();
+        const pUpper = (telemetry.phase || '').toUpperCase();
         let mappedPhase: BrewPhase = prev.phase;
-        if (pUpper === 'WATER_FILL') mappedPhase = 'WATER_FILL';
+
+        if (pUpper === 'POD_DETECTED' || pUpper === 'POD_DROP') mappedPhase = 'CONFIRMED';
+        else if (pUpper === 'WATER_FILL') mappedPhase = 'WATER_FILL';
         else if (pUpper === 'SOAKING') mappedPhase = 'SOAKING';
         else if (pUpper === 'HEATING') mappedPhase = 'HEATING';
         else if (pUpper === 'STIRRING') mappedPhase = 'STIRRING';
@@ -381,22 +381,36 @@ export function useMachineState() {
         else if (pUpper === 'DISPENSING') mappedPhase = 'DISPENSING';
         else if (pUpper === 'READY' || pUpper === 'COMPLETE') mappedPhase = 'COMPLETE';
         else if (pUpper === 'CLEANING') mappedPhase = 'CLEANING';
-        else if (pUpper === 'IDLE' && prev.phase !== 'IDLE') mappedPhase = 'IDLE';
+        else if (pUpper === 'IDLE' && prev.phase !== 'IDLE' && prev.phase !== 'READY' && prev.phase !== 'COMPLETE') {
+          mappedPhase = 'IDLE';
+        }
+
+        const isDispensing = mappedPhase === 'FILTRATION' || mappedPhase === 'DISPENSING';
+        const isCleaning = mappedPhase === 'CLEANING';
 
         return {
           ...prev,
           phase: mappedPhase,
           stage: phaseToStage(mappedPhase),
           elapsed_sec: telemetry.elapsed_sec,
+          estimated_remaining_sec: Math.max(0, TOTAL_DEMO_SEC - telemetry.elapsed_sec),
           paused: telemetry.paused,
           hardwareConnected: true,
+          hardwareTelemetry: telemetry,
           sensor: {
             ...prev.sensor,
             temperature_c: telemetry.temp_c,
             mass_g: telemetry.water_ml,
-            heater: telemetry.heater,
-            pump: telemetry.pump,
-            stirrer: telemetry.stirrer,
+            water_ml: telemetry.water_ml,
+            flow_rate_lpm: telemetry.flow_rate_lpm,
+            flow_pulses: telemetry.flow_pulses,
+            flow_sensor_ok: telemetry.flow_sensor_ok ?? true,
+            target_mass_g: Math.round(telemetry.target_water_ml * 0.25),
+            heater: telemetry.heater as ActuatorState,
+            pump: telemetry.pump as ActuatorState,
+            stirrer: telemetry.stirrer as ActuatorState,
+            product_valve: isDispensing ? 'OPEN' : 'CLOSED',
+            drain_valve: isCleaning ? 'OPEN' : 'CLOSED',
           },
         };
       });

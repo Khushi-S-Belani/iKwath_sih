@@ -1,15 +1,17 @@
 import React from 'react';
 import { StatusChip } from './StatusChip';
 import { LiveBrewState } from '../data/machineState';
+import { FormulationProfile } from '../types';
 
 interface FiltrationScreenProps {
   brewState: LiveBrewState;
+  formulation?: FormulationProfile;
   onComplete: () => void;
 }
 
 type FiltrationStep = { id: string; label: string; done: boolean; active: boolean };
 
-export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, onComplete }) => {
+export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, formulation, onComplete }) => {
   const { phase, sensor } = brewState;
 
   const isFiltering = phase === 'FILTRATION';
@@ -20,22 +22,31 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, o
     { id: 'reduction', label: 'Reduction complete — target endpoint reached', done: true, active: false },
     { id: 'filter', label: 'Filter Extract — SS316 filter, bottom outlet', done: !isFiltering && !isDispensing && !isComplete ? false : !isFiltering, active: isFiltering },
     { id: 'product', label: 'Product path open — filtrate collected', done: isDispensing || isComplete, active: isFiltering },
-    { id: 'dispense', label: 'Dispense Kwatha — Peristaltic pump + valve', done: isComplete, active: isDispensing },
-    { id: 'ready', label: 'Brew complete — fresh Kwatha ready', done: isComplete, active: isComplete },
+    { id: 'dispense', label: `Dispense Kwatha — Peristaltic pump + valve (${formulation?.name ?? 'Extract'})`, done: isComplete, active: isDispensing },
+    { id: 'ready', label: `Brew complete — fresh ${formulation?.name ?? 'Kwatha'} ready`, done: isComplete, active: isComplete },
   ];
 
   return (
     <div className="screen-content filtration-screen">
       <div className="filtration-header">
-        <div className="filtration-title">
-          {isFiltering ? 'FILTER EXTRACT' : isDispensing ? 'DISPENSE KWATHA' : 'BREW COMPLETE'}
+        <div className="filtration-header-top">
+          <div className="filtration-title">
+            {isFiltering ? 'FILTER EXTRACT' : isDispensing ? 'DISPENSE KWATHA' : 'BREW COMPLETE'}
+          </div>
+          {formulation && (
+            <div className="wf-kwatha-badge">
+              <span className="wf-kwatha-leaf">🌿</span>
+              <span className="wf-kwatha-tag-label">KWATHA:</span>
+              <span className="wf-kwatha-name">{formulation.name}</span>
+            </div>
+          )}
         </div>
         <div className="filtration-sub">
           {isFiltering
-            ? 'Removable SS316 filter active — bottom outlet separating spent herbs.'
+            ? `Removable SS316 filter active — bottom outlet separating spent herbs for ${formulation?.name ?? 'Kwatha'}.`
             : isDispensing
-            ? 'Peristaltic pump + valve — controlled and complete dispensing.'
-            : 'Fresh Kwatha decoction dispensed and ready.'}
+            ? `Peristaltic pump + valve — controlled dispensing of fresh ${formulation?.name ?? 'Kwatha'}.`
+            : `Fresh ${formulation?.name ?? 'Kwatha'} decoction dispensed and ready.`}
         </div>
       </div>
 

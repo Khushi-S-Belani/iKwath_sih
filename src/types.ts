@@ -64,6 +64,10 @@ export interface SensorData {
   product_valve: ValveState;
   drain_valve: ValveState;
   cleaning_required: boolean;
+  water_ml?: number;
+  flow_rate_lpm?: number;
+  flow_pulses?: number;
+  flow_sensor_ok?: boolean;
 }
 
 // ─── Brew Record / Passport ───────────────────────────────────────────────────

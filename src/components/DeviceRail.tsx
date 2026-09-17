@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavSection, MachineMode, MachineStatus } from '../types';
+import { NavSection, MachineMode, MachineStatus, FormulationProfile } from '../types';
 
 interface NavItem {
   id: NavSection;
@@ -16,6 +16,7 @@ interface DeviceRailProps {
   mode: MachineMode;
   onModeChange: (mode: MachineMode) => void;
   brewInProgress: boolean;
+  selectedFormulation?: FormulationProfile;
   onOpenHardwareModal?: () => void;
   isHardwareConnected?: boolean;
 }
@@ -99,6 +100,7 @@ export const DeviceRail: React.FC<DeviceRailProps> = ({
   mode,
   onModeChange,
   brewInProgress,
+  selectedFormulation,
   onOpenHardwareModal,
   isHardwareConnected = false,
 }) => {
@@ -122,6 +124,17 @@ export const DeviceRail: React.FC<DeviceRailProps> = ({
         <div className="rail-status-dot" style={{ background: STATUS_DOT[machineStatus] }} />
         <span className="rail-status-label">{machineStatus}</span>
       </div>
+
+      {/* Active Formulation Card */}
+      {selectedFormulation && (
+        <div className="rail-formulation-card">
+          <div className="rfc-tag">ACTIVE KWATHA</div>
+          <div className="rfc-name" title={selectedFormulation.name}>
+            🌿 {selectedFormulation.name}
+          </div>
+          <div className="rfc-sub">{selectedFormulation.water_ml} mL · {selectedFormulation.extraction_temp_c}°C</div>
+        </div>
+      )}
 
       {/* ESP32 Hardware Quick Bridge Button */}
       {onOpenHardwareModal && (

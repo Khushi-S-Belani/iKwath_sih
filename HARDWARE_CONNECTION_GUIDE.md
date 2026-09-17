@@ -14,8 +14,8 @@ This guide details the complete circuit connections, pinouts, power distribution
 | **Hall Flow Sensor (6mm ID)** | 1 | 5V / 3.3V DC | Real-time water volume pulse counter |
 | **Micro Servo 1 (SG90 / MG90S / MG995)** | 1 | 5V DC | Herbal Decoction Stirring Agitator Arm |
 | **Micro Servo 2 (SG90 / MG90S / MG995)** | 1 | 5V DC | Herbal Pod Dispenser / Hopper Flap (0° - 90°) |
-| **DS18B20 Waterproof Temp Sensor** | 1 | 3.3V or 5V DC | Precision boiling vessel temperature monitor |
-| **4.7kΩ Resistor** | 1 | - | OneWire Pull-up resistor for DS18B20 |
+| **DHT11 Temp & Humidity Sensor** *(or DS18B20)* | 1 | 3.3V or 5V DC | Real-time temperature (°C) & ambient humidity (% RH) monitor |
+| **4.7kΩ / 10kΩ Resistor** | 1 | - | Pull-up resistor for DHT11 data line (only needed for 4-pin raw sensor) |
 | **1-Channel or 2-Channel 5V Relay** | 1 | 5V VCC, 3.3V Signal | Heater / Induction plate / Hotplate controller |
 | **Active Piezo Buzzer (5V)** | 1 | 3.3V - 5V DC | Audible notification & alarm beeper |
 | **4x4 Matrix Keypad (Optional)** | 1 | 3.3V Logic | Recipe selection & manual controls |
@@ -36,7 +36,7 @@ This guide details the complete circuit connections, pinouts, power distribution
      (Keypad Row 2) GPIO 39---|           |--- TX0 (Serial Debug)
                     GPIO 34---|           |--- RX0 (Serial Debug)
                     GPIO 35---|           |--- GPIO 21 (Keypad Col 1)
-(Keypad Row 1) [*]  GPIO 32---|           |--- GPIO 19 (DS18B20 Temp Data + 4.7kΩ)
+(Keypad Row 1) [*]  GPIO 32---|           |--- GPIO 15 (DHT11 / DS18B20 Temp Sensor Data)
 (Keypad Row 2) [*]  GPIO 33---|           |--- GPIO 18 (Flow Sensor Pulse Interrupt)
 (Buzzer Positive)   GPIO 25---|           |--- GPIO 5  (Keypad Col 4)
 (Pump MOSFET/Relay) GPIO 26---|           |--- GPIO 17 (Optional / Spare)
@@ -44,7 +44,7 @@ This guide details the complete circuit connections, pinouts, power distribution
 (Stirrer Servo 1)   GPIO 13---|           |--- GPIO 4  (Push Button to GND)
 (Pod Drop Servo 2)  GPIO 14---|           |--- GPIO 0  (Boot - Keep Free)
 (Keypad Col 2)      GPIO 12---|           |--- GPIO 2  (Keypad Col 3)
-(Keypad Col 2) [*]  GPIO 15---|           |--- GPIO 15 (Keypad Col 2)
+(Keypad Col 2) [*]  GPIO 15---|           |--- GPIO 19 (Alternative Temp Data / Spare)
                         GND---|           |--- GND (Common Ground)
                         VIN---|           |--- 3V3 (3.3V Rail)
                               +-----------+
@@ -62,15 +62,54 @@ This guide details the complete circuit connections, pinouts, power distribution
 
 ---
 
-### B. DS18B20 Temperature Sensor (with 4.7kΩ Pull-Up)
-- **RED Wire (VCC)**: Connect to **ESP32 3.3V** (or 5V)
-- **BLACK Wire (GND)**: Connect to **ESP32 GND**
-- **YELLOW / WHITE Wire (DATA)**: Connect to **ESP32 GPIO 19**
-- **4.7kΩ Resistor**: Connect between **RED Wire (VCC)** and **YELLOW Wire (DATA)**.
+### B. DHT11 Temperature & Humidity Sensor Wiring
+
+The DHT11 measures ambient temperature (0°C–50°C) and relative humidity (20%–90% RH).
+
+#### Option 1: 3-Pin DHT11 Module (PCB Breakout Board - Most Popular)
+*(This module already has a pull-up resistor soldered on the PCB!)*
+- **Pin `+` / `VCC`**: Connect to **ESP32 3.3V** (or 5V)
+- **Pin `-` / `GND`**: Connect to **ESP32 GND**
+- **Pin `S` / `DATA` / `OUT`**: Connect to **ESP32 GPIO 15** *(Adjacent to GND & 3V3)*
+
+```
+  3-Pin DHT11 Module            ESP32 DevKit V1
+  +------------------+         +----------------+
+  |  [ + / VCC ] ----|-------->| 3.3V           |
+  |  [ - / GND ] ----|-------->| GND            |
+  |  [ S / DATA ] ---|-------->| GPIO 15        |
+  +------------------+         +----------------+
+  *(No external resistor needed!)*
+```
+
+#### Option 2: 4-Pin Raw DHT11 Sensor (Blue Grille with 4 legs)
+Looking at the sensor from the front (blue grille facing you, pins pointing down):
+- **Pin 1 (VCC - Leftmost)**: Connect to **ESP32 3.3V**
+- **Pin 2 (DATA)**: Connect to **ESP32 GPIO 15**
+- **Pin 3 (NC)**: Leave disconnected / floating
+- **Pin 4 (GND - Rightmost)**: Connect to **ESP32 GND**
+- **Pull-up Resistor**: Place a **10kΩ** (or 4.7kΩ) resistor between **Pin 1 (3.3V)** and **Pin 2 (DATA / GPIO 15)**.
+
+```
+       4-Pin DHT11                     ESP32 DevKit V1
+      +-----------+                   +----------------+
+      | 1 2  3  4 |                   |                |
+      +-----------+                   |                |
+        | |  |  |                     |                |
+(VCC) --+ |  |  +-------------------->| GND            |
+        | |  +--- [NC - Do not connect]|               |
+        | +-------------------------->| GPIO 15        |
+        |    ^                        |                |
+        |    | 10k Resistor           |                |
+        +--[ 10k ]--+                 |                |
+        |                             |                |
+        +---------------------------->| 3.3V           |
+                                      +----------------+
+```
 
 > [!TIP]
-> **No Lighter? No Problem!**
-> The system has a built-in **Temperature Simulation Mode**. When active, the firmware or Web UI dynamically simulates the water heating curve (from 25°C to 90°C) when the relay is active. You can switch between physical DS18B20 and simulated mode with one click in the Web UI or a double-press of the physical push button!
+> **Temperature Simulation Mode:**
+> The system has a built-in **Temperature Simulation Mode**. When active, the firmware dynamically simulates the decoction heating curve (from 25°C to 90°C) when the relay is active. You can switch between physical sensor and simulated mode with one click in the Web UI or a double-press of the physical push button!
 
 ---
 

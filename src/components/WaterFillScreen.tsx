@@ -28,8 +28,18 @@ export const WaterFillScreen: React.FC<WaterFillScreenProps> = ({
 
       {/* Header */}
       <div className="wf-header">
-        <div className="wf-title">MEASURE WATER QUANTITY</div>
-        <div className="wf-sub">Load Cell + HX711 — real-time weight measurement via inlet or manual fill</div>
+        <div className="wf-header-top">
+          <div className="wf-title">MEASURE WATER QUANTITY</div>
+          <div className="wf-kwatha-badge">
+            <span className="wf-kwatha-leaf">🌿</span>
+            <span className="wf-kwatha-tag-label">KWATHA FORMULATION:</span>
+            <span className="wf-kwatha-name">{formulation.name}</span>
+            <span className="wf-kwatha-id">[{formulation.pod_id}]</span>
+          </div>
+        </div>
+        <div className="wf-sub">
+          Load Cell + HX711 — measuring <strong style={{ color: 'var(--text-primary)' }}>{targetMass} mL</strong> water for <strong style={{ color: '#16A34A' }}>{formulation.name}</strong> via inlet or manual fill
+        </div>
       </div>
 
       {/* Main layout */}
@@ -65,8 +75,9 @@ export const WaterFillScreen: React.FC<WaterFillScreenProps> = ({
 
           {/* Sensor chips */}
           <div className="wf-sensor-row">
-            <StatusChip label="Load Cell: ACTIVE" variant="active" />
-            <StatusChip label="HX711: CONNECTED" variant="active" />
+            <StatusChip label="Flow Sensor (GPIO 18): ACTIVE" variant="active" />
+            <StatusChip label={`Flow Rate: ${sensor.flow_rate_lpm ? sensor.flow_rate_lpm.toFixed(2) : '0.00'} L/min`} variant={sensor.pump === 'ACTIVE' ? 'active' : 'info'} />
+            <StatusChip label={`Pulses: ${sensor.flow_pulses ?? 0}`} variant="info" />
             <StatusChip label={`Pump: ${sensor.pump}`} variant={sensor.pump === 'ACTIVE' ? 'active' : 'off'} />
           </div>
         </div>

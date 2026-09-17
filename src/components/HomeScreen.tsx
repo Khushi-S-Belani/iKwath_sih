@@ -1,15 +1,19 @@
 import React from 'react';
-import { MachineStatus, BrewRecord } from '../types';
+import { MachineStatus, BrewRecord, SensorData } from '../types';
 import { StatusChip } from './StatusChip';
 import { AlertBanner } from './AlertBanner';
+import { Cpu, Flame, Droplets, RotateCw, Activity } from 'lucide-react';
 
 interface HomeScreenProps {
   machineStatus: MachineStatus;
   lastBrew: BrewRecord | null;
   chamberClean: boolean;
   waterReady: boolean;
+  sensor?: SensorData;
+  hardwareConnected?: boolean;
   onInsertPod: () => void;
   onViewHistory: () => void;
+  onOpenHardwareModal?: () => void;
 }
 
 const STATUS_CONFIG: Record<MachineStatus, { label: string; color: string; chipVariant: 'active' | 'off' | 'fault' | 'warning' | 'info' }> = {
@@ -26,11 +30,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   lastBrew,
   chamberClean,
   waterReady,
+  sensor,
+  hardwareConnected = false,
   onInsertPod,
   onViewHistory,
+  onOpenHardwareModal,
 }) => {
   const cfg = STATUS_CONFIG[machineStatus];
   const isReady = machineStatus === 'READY';
+
+  const liveTemp = sensor?.temperature_c ?? 24.2;
+  const liveMass = sensor?.mass_g ?? 0;
 
   return (
     <div className="screen-content home-screen">
@@ -42,14 +52,144 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
         <div className="home-status-block">
           <div className="home-title">iKWATH</div>
-          <StatusChip
-            label={machineStatus}
-            variant={cfg.chipVariant}
-          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <StatusChip
+              label={machineStatus}
+              variant={cfg.chipVariant}
+            />
+            {hardwareConnected && (
+              <span
+                onClick={onOpenHardwareModal}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#34d399',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 8px rgba(16, 185, 129, 0.2)',
+                }}
+                title="ESP32 Bidirectional Hardware Bridge Active"
+              >
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                ESP32 SYNCED
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="home-sub-text">{cfg.label}</div>
+
+      {/* Live ESP32 Hardware Telemetry Bar */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '10px',
+          margin: '10px 0 14px 0',
+        }}
+      >
+        {/* DS18B20 Probe */}
+        <div
+          style={{
+            padding: '10px 12px',
+            background: 'rgba(251, 146, 60, 0.08)',
+            border: '1px solid rgba(251, 146, 60, 0.25)',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <Flame style={{ width: 16, height: 16, color: '#fb923c', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
+              DS18B20 Temp
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#fb923c' }}>
+              {liveTemp.toFixed(1)} <span style={{ fontSize: '11px', fontWeight: 500 }}>°C</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Water / Mass Sensor */}
+        <div
+          style={{
+            padding: '10px 12px',
+            background: 'rgba(56, 189, 248, 0.08)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <Droplets style={{ width: 16, height: 16, color: '#38bdf8', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
+              Chamber Fluid
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#38bdf8' }}>
+              {liveMass.toFixed(0)} <span style={{ fontSize: '11px', fontWeight: 500 }}>mL</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actuator Status */}
+        <div
+          style={{
+            padding: '10px 12px',
+            background: 'rgba(192, 132, 252, 0.08)',
+            border: '1px solid rgba(192, 132, 252, 0.25)',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <RotateCw style={{ width: 16, height: 16, color: '#c084fc', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
+              Actuators
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: sensor?.heater === 'ACTIVE' || sensor?.pump === 'ACTIVE' || sensor?.stirrer === 'ACTIVE' ? '#c084fc' : '#64748b' }}>
+              {sensor?.heater === 'ACTIVE' ? 'HEATER ON' : sensor?.pump === 'ACTIVE' ? 'PUMP ON' : sensor?.stirrer === 'ACTIVE' ? 'STIRRER ON' : 'STANDBY'}
+            </div>
+          </div>
+        </div>
+
+        {/* Controller Link */}
+        <div
+          onClick={onOpenHardwareModal}
+          style={{
+            padding: '10px 12px',
+            background: hardwareConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(30, 41, 59, 0.4)',
+            border: hardwareConnected ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(71, 85, 105, 0.4)',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+          }}
+          title="Click to open ESP32 hardware modal"
+        >
+          <Cpu style={{ width: 16, height: 16, color: hardwareConnected ? '#34d399' : '#94a3b8', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
+              ESP32 Link
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: hardwareConnected ? '#34d399' : '#94a3b8' }}>
+              {hardwareConnected ? '115200 BAUD' : 'DISCONNECTED'}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Attention alert */}
       {machineStatus === 'ATTENTION' && (
@@ -90,9 +230,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span className="home-check-icon">{waterReady ? '✓' : '✗'}</span>
           <span>Water: {waterReady ? 'READY' : 'REFILL NEEDED'}</span>
         </div>
-        <div className="home-check-item ok">
-          <span className="home-check-icon">✓</span>
-          <span>System: ONLINE</span>
+        <div className={`home-check-item ${hardwareConnected ? 'ok' : ''}`}>
+          <span className="home-check-icon">{hardwareConnected ? '✓' : '•'}</span>
+          <span>ESP32: {hardwareConnected ? 'CONNECTED' : 'STANDALONE'}</span>
         </div>
       </div>
 

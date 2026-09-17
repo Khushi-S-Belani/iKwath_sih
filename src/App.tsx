@@ -45,12 +45,67 @@ export default function App() {
   const machine = useMachineState();
   const { state: brewState } = machine;
 
-  // Listen to ESP32 connection state
+  // Listen to ESP32 connection state & auto-reconnect on page load
   useEffect(() => {
-    return esp32Serial.onConnectionChange((connected) => {
+    esp32Serial.autoReconnect();
+    const unsubConn = esp32Serial.onConnectionChange((connected) => {
       setIsHardwareConnected(connected);
+      if (connected) {
+        // Sync currently selected formulation parameters to ESP32
+        esp32Serial.syncRecipe(selectedFormulation.water_ml, selectedFormulation.extraction_temp_c, selectedFormulation.name);
+      }
     });
-  }, []);
+
+    // Listen to physical 4x4 Keypad presses from ESP32
+    const unsubKeypad = esp32Serial.onKeypad((key) => {
+      if (key === '1') {
+        setSelectedFormulation(FORMULATIONS[0]);
+        esp32Serial.syncRecipe(FORMULATIONS[0].water_ml, FORMULATIONS[0].extraction_temp_c, FORMULATIONS[0].name);
+      } else if (key === '2') {
+        const f = FORMULATIONS[1] || FORMULATIONS[0];
+        setSelectedFormulation(f);
+        esp32Serial.syncRecipe(f.water_ml, f.extraction_temp_c, f.name);
+      } else if (key === '3') {
+        const f = FORMULATIONS[2] || FORMULATIONS[0];
+        setSelectedFormulation(f);
+        esp32Serial.syncRecipe(f.water_ml, f.extraction_temp_c, f.name);
+      } else if (key === '*') {
+        if (brewState.phase === 'IDLE' || brewState.phase === 'READY' || brewState.phase === 'COMPLETE') {
+          handleStartBrew();
+        } else {
+          machine.setPaused(!brewState.paused);
+        }
+      } else if (key === '#') {
+        handleCancelBrew();
+      } else if (key === 'D') {
+        handleStartCleaning();
+      }
+    });
+
+    // Listen to physical Push Button events from ESP32 (GPIO 4)
+    const unsubButton = esp32Serial.onButtonEvent((event, data) => {
+      if (event === 'start_pressed') {
+        handleStartBrew();
+      } else if (event === 'reset_pressed') {
+        handleCancelBrew();
+      } else if (event === 'pause_pressed') {
+        machine.setPaused(Boolean(data?.paused));
+      }
+    });
+
+    return () => {
+      unsubConn();
+      unsubKeypad();
+      unsubButton();
+    };
+  }, [selectedFormulation, brewState.phase, brewState.paused]);
+
+  // Sync recipe to ESP32 whenever formulation selection changes
+  useEffect(() => {
+    if (isHardwareConnected) {
+      esp32Serial.syncRecipe(selectedFormulation.water_ml, selectedFormulation.extraction_temp_c, selectedFormulation.name);
+    }
+  }, [selectedFormulation, isHardwareConnected]);
 
   // Machine status derived from brew phase
   const machineStatus: MachineStatus =
@@ -68,7 +123,7 @@ export default function App() {
     const timeMin = brewState.elapsed_sec / 60;
     setMassHistory((prev) => [...prev.slice(-100), { time: parseFloat(timeMin.toFixed(2)), mass: brewState.sensor.mass_g }]);
     setTempHistory((prev) => [...prev.slice(-100), { time: parseFloat(timeMin.toFixed(2)), temp: brewState.sensor.temperature_c }]);
-  }, [brewState.elapsed_sec]);
+  }, [brewState.elapsed_sec, brewInProgress, brewState.sensor.mass_g, brewState.sensor.temperature_c]);
 
   // Auto-navigate based on brew phase
   useEffect(() => {
@@ -76,8 +131,6 @@ export default function App() {
       setCurrentSection('water-fill');
     } else if (brewState.phase === 'SOAKING' || brewState.phase === 'HEATING' || brewState.phase === 'STIRRING') {
       setCurrentSection('live-brew');
-    } else if (brewState.phase === 'REDUCTION') {
-      // Don't force nav — let user see reduction screen if they go there
     } else if (brewState.phase === 'FILTRATION' || brewState.phase === 'DISPENSING') {
       setCurrentSection('filtration');
     } else if (brewState.phase === 'COMPLETE') {
@@ -126,12 +179,12 @@ export default function App() {
     setPodState('SCANNING');
     setCurrentSection('pod');
     machine.scanPod(f.pod_id, f.id);
-    setTimeout(() => setPodState('DETECTED'), 2000);
+    setTimeout(() => setPodState('DETECTED'), 1500);
   }, [machine]);
 
   const handlePodRetry = useCallback(() => {
     setPodState('SCANNING');
-    setTimeout(() => setPodState('DETECTED'), 2000);
+    setTimeout(() => setPodState('DETECTED'), 1500);
   }, []);
 
   const handlePodConfirm = useCallback(() => {
@@ -142,7 +195,12 @@ export default function App() {
   const handleStartBrew = useCallback(() => {
     setMassHistory([]);
     setTempHistory([]);
-    machine.startBrewSimulation(selectedFormulation.pod_id, selectedFormulation.id);
+    machine.startBrewSimulation(
+      selectedFormulation.pod_id,
+      selectedFormulation.id,
+      selectedFormulation.water_ml,
+      selectedFormulation.extraction_temp_c
+    );
     setCurrentSection('live-brew');
   }, [selectedFormulation, machine]);
 
@@ -204,13 +262,13 @@ export default function App() {
 
   const SECTION_TITLES: Record<NavSection, { title: string; sub: string }> = {
     home: { title: 'Home', sub: 'Machine readiness and quick actions.' },
-    formulations: { title: 'Step 1 · Select Kwatha', sub: 'Choose a formulation or add a new pod profile.' },
-    pod: { title: 'Step 2 · Load Formulation Profile', sub: 'System loads and verifies process parameters.' },
+    formulations: { title: 'Step 1 · Select Kwatha', sub: 'Choose a classical Ayurvedic formulation or add a new pod profile.' },
+    pod: { title: 'Step 2 · Load Formulation Profile', sub: `Verifying process parameters for ${selectedFormulation.name}.` },
     'brew-confirm': { title: 'Step 3 · Insert Pod & Add Water', sub: `Place herbal pod in vessel and add water — ${selectedFormulation.name}` },
-    'water-fill': { title: 'Step 4 · Measure Water Quantity', sub: 'Load Cell + Flow Sensor real-time fluid measurement.' },
-    'live-brew': { title: 'Live Brew', sub: `${selectedFormulation.name} · BREW #${brewState.brew_number}` },
-    reduction: { title: 'Step 8 · Monitor Reduction', sub: 'Load Cell + Temperature — tracking decoction reduction endpoint.' },
-    filtration: { title: brewState.phase === 'DISPENSING' ? 'Step 10 · Dispense Kwatha' : 'Step 9 · Filter Extract', sub: brewState.phase === 'DISPENSING' ? 'Peristaltic pump + valve — controlled dispensing.' : 'Removable SS316 filter — bottom outlet.' },
+    'water-fill': { title: 'Step 4 · Measure Water Quantity', sub: `Measuring ${selectedFormulation.water_ml} mL for ${selectedFormulation.name} via Load Cell + Flow Sensor.` },
+    'live-brew': { title: `Live Brew · ${selectedFormulation.name}`, sub: `${selectedFormulation.name} · BREW #${brewState.brew_number}` },
+    reduction: { title: 'Step 8 · Monitor Reduction', sub: `Load Cell + Temperature — tracking ${selectedFormulation.name} reduction endpoint (${selectedFormulation.reduction_endpoint_g}g).` },
+    filtration: { title: brewState.phase === 'DISPENSING' ? `Step 10 · Dispense ${selectedFormulation.name}` : `Step 9 · Filter ${selectedFormulation.name}`, sub: brewState.phase === 'DISPENSING' ? `Peristaltic pump + valve — dispensing fresh ${selectedFormulation.name}.` : `Removable SS316 filter — bottom outlet for ${selectedFormulation.name}.` },
     'brew-passport': { title: 'Brew Passport', sub: `Complete brew record for ${selectedFormulation.name}.` },
     cleaning: { title: 'Step 11 · Cleaning / Rinse Cycle', sub: 'Washable flow path + filter rinse — manual or automated.' },
     history: { title: 'Brew History', sub: 'All recorded brews with search and filters.' },
@@ -230,8 +288,11 @@ export default function App() {
             lastBrew={brewHistory[0] ?? null}
             chamberClean={!brewState.sensor.cleaning_required}
             waterReady={true}
+            sensor={brewState.sensor}
+            hardwareConnected={isHardwareConnected}
             onInsertPod={handleInsertPod}
             onViewHistory={() => setCurrentSection('history')}
+            onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
           />
         );
       case 'formulations':
@@ -293,6 +354,7 @@ export default function App() {
         return (
           <FiltrationScreen
             brewState={brewState}
+            formulation={selectedFormulation}
             onComplete={() => setCurrentSection('brew-passport')}
           />
         );
@@ -354,6 +416,7 @@ export default function App() {
               mode={mode}
               onModeChange={setMode}
               brewInProgress={brewInProgress}
+              selectedFormulation={selectedFormulation}
               onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
               isHardwareConnected={isHardwareConnected}
             />
@@ -366,6 +429,19 @@ export default function App() {
                   <div className="screen-sub">{meta.sub}</div>
                 </div>
                 <div className="topbar-right">
+                  {/* Selected Kwatha Formulation Pill */}
+                  <div
+                    className="topbar-kwatha-pill"
+                    onClick={() => !brewInProgress && setCurrentSection('formulations')}
+                    title={`Selected Kwatha Formulation: ${selectedFormulation.name} (${selectedFormulation.pod_id})`}
+                    style={{ cursor: brewInProgress ? 'default' : 'pointer' }}
+                  >
+                    <span className="tkp-icon">🌿</span>
+                    <div className="tkp-content">
+                      <span className="tkp-label">KWATHA</span>
+                      <span className="tkp-name">{selectedFormulation.name}</span>
+                    </div>
+                  </div>
                   {/* ESP32 Hardware Badge */}
                   <button
                     onClick={() => setIsHardwareModalOpen(true)}
