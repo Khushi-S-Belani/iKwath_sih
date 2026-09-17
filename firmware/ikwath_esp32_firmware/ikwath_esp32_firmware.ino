@@ -27,7 +27,6 @@
 */
 
 #include <Arduino.h>
-#include <DHT.h>
 #include <ESP32Servo.h>
 #include <Keypad.h>
 
@@ -45,9 +44,6 @@
 #define PIN_BUZZER           25   // Active Buzzer Positive
 #define PIN_PUMP_MOSFET      26   // Peristaltic Pump
 #define PIN_HEATER_RELAY     27   // Heater Relay
-
-// DHT Sensor Type
-#define DHTTYPE DHT11
 
 // Flow Sensor Calibration (Pulses per mL)
 #define FLOW_CALIBRATION_FACTOR 5.88f
@@ -101,9 +97,78 @@ const char* PHASE_NAMES[] = {
 };
 
 // =============================================================================
+// STANDALONE ZERO-DEPENDENCY DHT11 SENSOR CLASS (No external libraries required!)
+// =============================================================================
+class SimpleDHT11 {
+private:
+  uint8_t _pin;
+public:
+  SimpleDHT11(uint8_t pin) : _pin(pin) {}
+
+  void begin() {
+    pinMode(_pin, INPUT_PULLUP);
+  }
+
+  bool read(float &tempC, float &humidity) {
+    uint8_t data[5] = {0, 0, 0, 0, 0};
+
+    // 1. Send Start Signal to DHT11 (Hold LOW for 20ms)
+    pinMode(_pin, OUTPUT);
+    digitalWrite(_pin, LOW);
+    delay(20);
+    digitalWrite(_pin, HIGH);
+    delayMicroseconds(30);
+    pinMode(_pin, INPUT_PULLUP);
+
+    // 2. Wait for DHT11 Response (80µs LOW, then 80µs HIGH)
+    unsigned long timeout = micros();
+    while (digitalRead(_pin) == HIGH) {
+      if (micros() - timeout > 120) return false;
+    }
+    timeout = micros();
+    while (digitalRead(_pin) == LOW) {
+      if (micros() - timeout > 120) return false;
+    }
+    timeout = micros();
+    while (digitalRead(_pin) == HIGH) {
+      if (micros() - timeout > 120) return false;
+    }
+
+    // 3. Read 40 Data Bits (5 Bytes)
+    for (int i = 0; i < 40; i++) {
+      timeout = micros();
+      while (digitalRead(_pin) == LOW) {
+        if (micros() - timeout > 120) return false;
+      }
+
+      unsigned long pulseStart = micros();
+      while (digitalRead(_pin) == HIGH) {
+        if (micros() - pulseStart > 120) return false;
+      }
+      unsigned long pulseLen = micros() - pulseStart;
+
+      // Pulse > 40µs represents bit '1', else '0'
+      if (pulseLen > 40) {
+        data[i / 8] |= (1 << (7 - (i % 8)));
+      }
+    }
+
+    // 4. Checksum Verification
+    uint8_t checksum = (data[0] + data[1] + data[2] + data[3]) & 0xFF;
+    if (data[4] != checksum || (data[0] == 0 && data[2] == 0)) {
+      return false;
+    }
+
+    humidity = (float)data[0] + ((float)data[1] * 0.1f);
+    tempC = (float)data[2] + ((float)data[3] * 0.1f);
+    return true;
+  }
+};
+
+// =============================================================================
 // GLOBAL OBJECTS & VARIABLES
 // =============================================================================
-DHT dht(PIN_DHT_DATA, DHTTYPE);
+SimpleDHT11 dht(PIN_DHT_DATA);
 
 Servo servoStirrer;
 Servo servoPodFlap;
@@ -241,12 +306,13 @@ void updateTemperature() {
   if (now - lastTempReadTime < 1000) return; // Sampled every 1 second (1000ms)
   lastTempReadTime = now;
 
-  float t = dht.readTemperature();
-  float h = dht.readHumidity();
+  float t = 0.0f;
+  float h = 0.0f;
+  bool success = dht.read(t, h);
 
-  if (!isnan(t) && t > -20.0f && t < 80.0f) {
+  if (success && t > -20.0f && t < 80.0f) {
     currentTempC = t;
-    if (!isnan(h)) currentHumidity = h;
+    currentHumidity = h;
     dhtFound = true;
     Serial.printf("[TEMP] 🌡️ DHT11 Live: %.1f °C (%.1f °F) | 💧 Humidity: %.1f %%\n", 
                   currentTempC, (currentTempC * 1.8f) + 32.0f, currentHumidity);
