@@ -204,8 +204,9 @@ float currentHumidity = 50.0f;
 float simulatedTempC = 25.0f;
 bool dhtFound = false;
 
-// Polarity Settings (Supports both Active-HIGH and Active-LOW modules)
-bool relayActiveLow = true;     // Most 5V relay modules trigger on LOW
+// Polarity Settings (Supports 2PH63091A Active-LOW Relay & Active-HIGH modules)
+bool relayActiveLow = true;     // 2PH63091A Relay 1 (Heater - GPIO 27) Active LOW
+bool pumpActiveLow = true;      // 2PH63091A Relay 2 (Pump - GPIO 26) Active LOW
 bool buzzerActiveLow = false;   // Standard active buzzers trigger on HIGH (HIGH = sound)
 
 // Actuator States
@@ -261,11 +262,15 @@ void beep(int durationMs, int count = 1, int pauseMs = 80) {
 }
 
 // =============================================================================
-// ACTUATOR DRIVER FUNCTIONS
+// ACTUATOR DRIVER FUNCTIONS (2PH63091A Dual Relay & Servo Drivers)
 // =============================================================================
 void setPump(bool on) {
   pumpState = on;
-  digitalWrite(PIN_PUMP_MOSFET, on ? HIGH : LOW);
+  if (pumpActiveLow) {
+    digitalWrite(PIN_PUMP_MOSFET, on ? LOW : HIGH);
+  } else {
+    digitalWrite(PIN_PUMP_MOSFET, on ? HIGH : LOW);
+  }
 }
 
 void setHeater(bool on) {
@@ -726,6 +731,11 @@ void handleSerialCommands() {
   } else if (line.indexOf("test_pump") >= 0 || line.equalsIgnoreCase("PUMP_TOGGLE")) {
     setPump(!pumpState);
     Serial.printf("{\"ack\":\"test_pump\",\"pump\":%s}\n", pumpState ? "\"ACTIVE\"" : "\"OFF\"");
+    sendTelemetry();
+  } else if (line.indexOf("invert_pump") >= 0 || line.equalsIgnoreCase("PUMP_INVERT")) {
+    pumpActiveLow = !pumpActiveLow;
+    setPump(false);
+    Serial.printf("{\"ack\":\"invert_pump\",\"pump_active_low\":%s}\n", pumpActiveLow ? "true" : "false");
     sendTelemetry();
   }
   // 9. STIRRER SERVO CONTROLS

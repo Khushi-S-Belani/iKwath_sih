@@ -147,11 +147,58 @@ You can drive the DC pump using an **N-Channel MOSFET module** (e.g. IRF520 / D4
 
 ---
 
-### F. Relay Module (Heater / Heating Coil / Lamp)
-- **VCC**: Connect to **ESP32 5V (Vin)**
-- **GND**: Connect to **ESP32 GND**
-- **IN1 / Signal**: Connect to **ESP32 GPIO 27**
-- **COM (Common)** & **NO (Normally Open)**: Wired in series with your heating element power line.
+### E. 2-Channel Relay Module (Model: 2PH63091A)
+The **2PH63091A** is a 2-channel 5V optocoupler-isolated relay module (Songle 10A 250VAC/30VDC). In the iKwath system:
+- **Channel 1 (IN1)** controls the **Heater / Hotplate / Heating Element**.
+- **Channel 2 (IN2)** controls the **Water Pump / Peristaltic Pump / Water Solenoid Valve**.
+
+#### 1. Logic Input Header Pins (4-Pin Male Header)
+| 2PH63091A Pin | Connects To | Description |
+| :--- | :--- | :--- |
+| **`VCC`** | **ESP32 5V (VIN)** or External 5V | Powers the optocoupler and module logic |
+| **`GND`** | **ESP32 GND** | Common Ground |
+| **`IN1`** | **ESP32 GPIO 27** | Relay 1 Trigger (Heater) — **Active LOW** |
+| **`IN2`** | **ESP32 GPIO 26** | Relay 2 Trigger (Pump / Valve) — **Active LOW** |
+
+#### 2. JD-VCC Isolation Jumper (3-Pin Header with Yellow Cap)
+- **Standard Setup (Single 5V Rail)**: Keep the **yellow jumper cap placed between `JD-VCC` and `VCC`**.
+- **Opto-Isolated Setup (Recommended for high-power induction loads)**: Remove the jumper cap. Connect **External 5V Power Supply (+5V)** to `JD-VCC`, and connect external GND to relay GND. This completely isolates the relay coil current surges from the ESP32.
+
+#### 3. Output Screw Terminals (Load Side Switching)
+Each channel has 3 screw terminals: **`NO` (Normally Open)**, **`COM` (Common)**, **`NC` (Normally Closed)**.
+
+```
+       [ 2PH63091A 2-CHANNEL RELAY MODULE ]
+     +----------------------------------------+
+     | [NO1] [COM1] [NC1]  [NO2] [COM2] [NC2] |
+     |      RELAY 1               RELAY 2     |
+     |     (HEATER)               (PUMP)      |
+     |                                        |
+     |      [LED1]                [LED2]      |
+     |                                        |
+     |               [JD-VCC|VCC|GND] (Jumper)|
+     |  [GND] [IN1] [IN2] [VCC]               |
+     +---|------|-----|-----|-----------------+
+         |      |     |     |
+         |      |     |     +---> ESP32 5V (VIN)
+         |      |     +---------> ESP32 GPIO 26 (Pump Trigger)
+         |      +---------------> ESP32 GPIO 27 (Heater Trigger)
+         +----------------------> ESP32 GND (Common Ground)
+```
+
+- **Relay 1 (Heater / Hotplate / Coil AC or DC)**:
+  - **`COM1`**: Connect to AC Live / DC (+) Power source line.
+  - **`NO1`**: Connect to Heater (+) or Live terminal.
+  - *(NC1 is left unconnected)*.
+- **Relay 2 (12V / 5V Peristaltic Pump / Water Valve)**:
+  - **`COM2`**: Connect to Pump Power Supply (+) line (+12V or +5V).
+  - **`NO2`**: Connect to Pump (+) motor wire.
+  - **Pump (-) wire**: Connect directly to Pump Power Supply GND / (-).
+  - *(NC2 is left unconnected)*.
+
+> [!NOTE]
+> **Active-LOW Triggering Logic:**
+> The `2PH63091A` module turns **ON** when the input signal is **LOW (0V)** and turns **OFF** when the signal is **HIGH (3.3V/5V)**. The iKwath ESP32 firmware is pre-configured with `relayActiveLow = true` to handle this logic seamlessly.
 
 ---
 
