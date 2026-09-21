@@ -1,10 +1,10 @@
 /*
   =============================================================================
   iKwath - Smart Automated Ayurvedic Kwatha / Decoction Machine
-  ESP32 Master Controller Firmware (v4.1 - High-Torque 15 RPM Stepper & Bulletproof Relay)
+  ESP32 Master Controller Firmware (v4.2 - Stepper.h Integration @ 15 RPM)
   =============================================================================
   Hardware Pinout Mapping:
-  - GPIO 2:  Onboard Blue Status LED (Solid ON when connected / running)
+  - GPIO 2:  Onboard Blue Status LED (Solid ON when running)
   - GPIO 4:  Push Button (Active LOW with internal pull-up)
   - GPIO 14: Servo Motor (Pod Flap / Door 0° closed ↔ 90° open)
   - GPIO 15: DHT11 Sensor Data (Temperature & Humidity)
@@ -13,11 +13,12 @@
   - GPIO 26: Relay Channel 2 (Peristaltic / Water Pump - Active LOW)
   - GPIO 27: Relay Channel 1 (Heating Element / Hotplate - Active LOW)
   
-  28BYJ-48 Stepper Motor + ULN2003A Driver Pins:
-  - GPIO 13: ULN2003A IN1 (Blue Wire / Coil 1)
-  - GPIO 12: ULN2003A IN2 (Pink Wire / Coil 3)
-  - GPIO 19: ULN2003A IN3 (Yellow Wire / Coil 2)
-  - GPIO 23: ULN2003A IN4 (Orange Wire / Coil 4)
+  28BYJ-48 Stepper Motor + ULN2003A Driver Pins (Stepper.h Order):
+  - IN1: GPIO 13 (Blue)
+  - IN2: GPIO 12 (Pink)
+  - IN3: GPIO 19 (Yellow)
+  - IN4: GPIO 23 (Orange)
+  Stepper motor(STEPS_PER_REV, IN1, IN3, IN2, IN4); // Order: 13, 19, 12, 23
   
   Workflow Execution Sequence:
   1. Push Button (GPIO 4) pressed -> Awaken / Start trigger emitted to website.
@@ -26,13 +27,14 @@
   4. Water Fill: Relay 2 turns pump ON; flows 400 mL via flow sensor on GPIO 18.
   5. Soaking: 5-second timed soaking step.
   6. Heating: Relay 1 turns heater ON; DHT11 on GPIO 15 monitors until 35°C is reached.
-  7. Stirring: 28BYJ-48 stepper motor + ULN2003A driver agitates @ 15 RPM for 10 seconds.
+  7. Stirring: 28BYJ-48 stepper motor stirs @ 15 RPM for 10 seconds via Stepper.h.
   8. Reduction, Filtration & Dispense: 5s pause each, then ready & 3 victory beeps!
   =============================================================================
 */
 
 #include <Arduino.h>
 #include <ESP32Servo.h>
+#include <Stepper.h>
 
 // =============================================================================
 // PIN DEFINITIONS
@@ -47,10 +49,16 @@
 #define PIN_HEATER_RELAY     27   // Relay Channel 1 (Heater)
 
 // 28BYJ-48 Stepper + ULN2003A Driver Pins
-#define PIN_STEPPER_IN1      13   // ULN2003A IN1 (Blue)
-#define PIN_STEPPER_IN2      12   // ULN2003A IN2 (Pink)
-#define PIN_STEPPER_IN3      19   // ULN2003A IN3 (Yellow)
-#define PIN_STEPPER_IN4      23   // ULN2003A IN4 (Orange)
+const int IN1 = 13; // Blue
+const int IN2 = 12; // Pink
+const int IN3 = 19; // Yellow
+const int IN4 = 23; // Orange
+
+// 28BYJ-48: 2048 full steps per 360° output shaft revolution (4-step sequence in Stepper.h)
+const int STEPS_PER_REV = 2048;
+
+// IMPORTANT ORDER: IN1 (13), IN3 (19), IN2 (12), IN4 (23) for 28BYJ-48 unipolar coils
+Stepper motor(STEPS_PER_REV, IN1, IN3, IN2, IN4);
 
 // Flow Sensor Calibration (Pulses per mL)
 #define FLOW_CALIBRATION_FACTOR 5.88f
@@ -201,41 +209,11 @@ bool buzzerState = false;
 bool pumpState = false;
 int currentPodAngle = 0;
 
-// =============================================================================
-// 28BYJ-48 STEPPER MOTOR DRIVER STATE (ULN2003A @ 15 RPM HIGH-TORQUE)
-// =============================================================================
+// Stepper Motor State via Stepper.h
 bool stepperActive = false;
-int stepperStepIndex = 0;
-int stepperDirection = 1;
-unsigned long lastStepperStepMicros = 0;
-float stepperTargetRpm = 15.0f;
-
-// In 4-step dual-phase full-step mode:
-// 28BYJ-48 has 32 internal steps * 64 gear ratio = 2048 steps per 360° output revolution.
-// At 15 RPM = 15 / 60 = 0.25 rev/sec -> 512 steps/sec.
-// Interval: 1,000,000 µs / 512 steps = 1953 microseconds per step (~1.95 ms).
-// Dual-phase excitation energizes 2 coils simultaneously, providing 100% higher torque and preventing stalls!
-unsigned long stepperIntervalMicros = 1953;
-unsigned long stepperStepCounter = 0;
-bool stepperUseAltMapping = false; // false = standard IN1->IN3->IN2->IN4; true = sequential IN1->IN2->IN3->IN4
-
-// 4-Step Dual-Phase High Torque Matrix: [IN1 (GPIO 13), IN2 (GPIO 12), IN3 (GPIO 19), IN4 (GPIO 23)]
-// Coil sequence: (Coil 1 + Coil 2) -> (Coil 2 + Coil 3) -> (Coil 3 + Coil 4) -> (Coil 4 + Coil 1)
-// Translates to: (IN1 + IN3) -> (IN3 + IN2) -> (IN2 + IN4) -> (IN4 + IN1)
-const uint8_t STEPPER_FULL_STEP[4][4] = {
-  {1, 0, 1, 0}, // Step 0: IN1 (Blue) + IN3 (Yellow)
-  {0, 1, 1, 0}, // Step 1: IN3 (Yellow) + IN2 (Pink)
-  {0, 1, 0, 1}, // Step 2: IN2 (Pink) + IN4 (Orange)
-  {1, 0, 0, 1}  // Step 3: IN4 (Orange) + IN1 (Blue)
-};
-
-// Alternative 4-Step Sequential Matrix: [IN1, IN2, IN3, IN4]
-const uint8_t STEPPER_ALT_STEP[4][4] = {
-  {1, 1, 0, 0}, // Step 0: IN1 + IN2
-  {0, 1, 1, 0}, // Step 1: IN2 + IN3
-  {0, 0, 1, 1}, // Step 2: IN3 + IN4
-  {1, 0, 0, 1}  // Step 3: IN4 + IN1
-};
+int stepperDirection = 1;     // +1 = Clockwise, -1 = Counter-clockwise
+int stepperStepCounter = 0;
+float stepperSpeedRpm = 15.0f; // Exact 15 RPM target
 
 // Button Debounce
 int lastButtonState = HIGH;
@@ -270,51 +248,41 @@ void beep(int durationMs, int count = 1, int pauseMs = 80) {
 }
 
 // =============================================================================
-// 28BYJ-48 STEPPER MOTOR CONTROLLER (High-Torque Dual-Phase @ 15 RPM)
+// STEPPER MOTOR CONTROLLER (Stepper.h Driver @ 15 RPM)
 // =============================================================================
-void setStepperRpm(float rpm) {
+void setStepperSpeed(float rpm) {
   if (rpm < 1.0f) rpm = 1.0f;
-  if (rpm > 25.0f) rpm = 25.0f; // Safe torque boundary for 28BYJ-48
-  stepperTargetRpm = rpm;
-  // 2048 steps per rev: interval = 60,000,000 / (rpm * 2048)
-  stepperIntervalMicros = (unsigned long)((60.0f * 1000000.0f) / (stepperTargetRpm * 2048.0f));
-  Serial.printf("[STEPPER] RPM set to: %.1f (Step Interval: %lu µs)\n", stepperTargetRpm, stepperIntervalMicros);
+  if (rpm > 25.0f) rpm = 25.0f;
+  stepperSpeedRpm = rpm;
+  motor.setSpeed((long)stepperSpeedRpm);
+  Serial.printf("[STEPPER] Speed set to: %.0f RPM\n", stepperSpeedRpm);
 }
 
 void setStepperActive(bool on) {
   stepperActive = on;
   if (!on) {
-    // Completely de-energize all coils to eliminate driver heating
-    digitalWrite(PIN_STEPPER_IN1, LOW);
-    digitalWrite(PIN_STEPPER_IN2, LOW);
-    digitalWrite(PIN_STEPPER_IN3, LOW);
-    digitalWrite(PIN_STEPPER_IN4, LOW);
-    Serial.println("[STEPPER] De-energized all coils (OFF).");
+    // Completely de-energize all 4 coils to prevent motor and ULN2003 driver heating
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, LOW);
+    Serial.println("[STEPPER] Motor STOPPED & all coils de-energized (LOW).");
   } else {
-    lastStepperStepMicros = micros();
-    Serial.printf("[STEPPER] Active @ %.1f RPM (%s sequence)\n", 
-                  stepperTargetRpm, stepperUseAltMapping ? "Alt Sequential" : "Standard Coil");
+    motor.setSpeed((long)stepperSpeedRpm);
+    Serial.printf("[STEPPER] Motor STARTING @ %.0f RPM (Stirring active)...\n", stepperSpeedRpm);
   }
 }
 
+// Non-blocking single-step updates in main loop
 void updateStepper() {
   if (!stepperActive) return;
 
-  unsigned long now = micros();
-  if (now - lastStepperStepMicros < stepperIntervalMicros) return;
-  lastStepperStepMicros = now;
+  // Advance 1 step per cycle
+  motor.step(stepperDirection * 1);
 
-  stepperStepIndex = (stepperStepIndex + stepperDirection + 4) % 4;
-  const uint8_t (*matrix)[4] = stepperUseAltMapping ? STEPPER_ALT_STEP : STEPPER_FULL_STEP;
-
-  digitalWrite(PIN_STEPPER_IN1, matrix[stepperStepIndex][0]);
-  digitalWrite(PIN_STEPPER_IN2, matrix[stepperStepIndex][1]);
-  digitalWrite(PIN_STEPPER_IN3, matrix[stepperStepIndex][2]);
-  digitalWrite(PIN_STEPPER_IN4, matrix[stepperStepIndex][3]);
-
-  // Reverse direction every 2048 steps (1 full 360° revolution) for effective fluid agitation
+  // Bi-directional agitation: reverse direction every 1024 steps (half revolution)
   stepperStepCounter++;
-  if (stepperStepCounter >= 2048) {
+  if (stepperStepCounter >= 1024) {
     stepperStepCounter = 0;
     stepperDirection = -stepperDirection;
   }
@@ -432,7 +400,7 @@ void sendTelemetry() {
   Serial.print(",\"pump_active_low\":"); Serial.print(pumpActiveLow ? "true" : "false");
   Serial.print(",\"stirrer\":"); Serial.print(stepperActive ? "\"ACTIVE\"" : "\"OFF\"");
   Serial.print(",\"stepper_active\":"); Serial.print(stepperActive ? "true" : "false");
-  Serial.print(",\"stepper_rpm\":"); Serial.print(stepperTargetRpm, 1);
+  Serial.print(",\"stepper_rpm\":"); Serial.print(stepperSpeedRpm, 0);
   Serial.print(",\"pod_deg\":"); Serial.print(currentPodAngle);
   Serial.print(",\"buzzer\":"); Serial.print(buzzerState ? "\"ACTIVE\"" : "\"OFF\"");
   Serial.print(",\"elapsed_sec\":"); Serial.print(elapsedSec);
@@ -494,7 +462,7 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_STIRRING:
-      // 5. 28BYJ-48 Stepper motor stirs @ 15 RPM for 10 seconds
+      // 5. 28BYJ-48 Stepper motor stirs @ 15 RPM for 10 seconds via Stepper.h
       setPump(false);
       setHeater(false);
       setStepperActive(true);
@@ -784,12 +752,7 @@ void processSerialCommand(String cmd) {
       return;
     } else if (action == "set_stepper_rpm") {
       float rpm = getJsonFloat(cmd, "rpm", 15.0f);
-      setStepperRpm(rpm);
-      return;
-    } else if (action == "toggle_stepper_mapping") {
-      stepperUseAltMapping = !stepperUseAltMapping;
-      Serial.printf("[CONFIG] Stepper sequence mapped to: %s\n", 
-                    stepperUseAltMapping ? "Alt Sequential (IN1-2-3-4)" : "Standard Coil (IN1-3-2-4)");
+      setStepperSpeed(rpm);
       return;
     } else if (action == "pod_open" || action == "test_pod") {
       setPodFlap(90);
@@ -863,13 +826,9 @@ void processSerialCommand(String cmd) {
     setStepperActive(false);
   } else if (cmd.startsWith("STEPPER:RPM:")) {
     float rpm = cmd.substring(12).toFloat();
-    setStepperRpm(rpm);
+    setStepperSpeed(rpm);
   } else if (cmd.equalsIgnoreCase("STEPPER:15RPM")) {
-    setStepperRpm(15.0f);
-  } else if (cmd.equalsIgnoreCase("STEPPER:ALT")) {
-    stepperUseAltMapping = !stepperUseAltMapping;
-    Serial.printf("[CONFIG] Stepper sequence mapped to: %s\n", 
-                  stepperUseAltMapping ? "Alt Sequential (IN1-2-3-4)" : "Standard Coil (IN1-3-2-4)");
+    setStepperSpeed(15.0f);
   } else if (cmd.startsWith("POD:")) {
     int angle = cmd.substring(4).toInt();
     setPodFlap(angle);
@@ -887,7 +846,7 @@ void processSerialCommand(String cmd) {
     tempSimulationMode = !tempSimulationMode;
     Serial.printf("[CONFIG] Temp Simulation: %s\n", tempSimulationMode ? "ENABLED" : "DISABLED");
   } else if (cmd.equalsIgnoreCase("PING")) {
-    Serial.println("{\"type\":\"pong\",\"version\":\"4.1\"}");
+    Serial.println("{\"type\":\"pong\",\"version\":\"4.2\"}");
   }
 }
 
@@ -900,7 +859,7 @@ void setup() {
 
   Serial.println("\n=============================================================");
   Serial.println("   iKwath - Smart Automated Ayurvedic Decoction Machine       ");
-  Serial.println("   ESP32 Master Controller Firmware v4.1                      ");
+  Serial.println("   ESP32 Master Controller Firmware v4.2 (Stepper.h @ 15 RPM) ");
   Serial.println("=============================================================");
 
   // Initialize GPIO Pins
@@ -916,11 +875,8 @@ void setup() {
   pinMode(PIN_PUMP_RELAY, OUTPUT);
   pinMode(PIN_HEATER_RELAY, OUTPUT);
 
-  // Initialize Stepper Pins
-  pinMode(PIN_STEPPER_IN1, OUTPUT);
-  pinMode(PIN_STEPPER_IN2, OUTPUT);
-  pinMode(PIN_STEPPER_IN3, OUTPUT);
-  pinMode(PIN_STEPPER_IN4, OUTPUT);
+  // Initialize Stepper Motor Speed
+  motor.setSpeed((long)stepperSpeedRpm);
   setStepperActive(false);
 
   // Quick Relay Diagnostic Test (Audible click verification)
@@ -936,18 +892,16 @@ void setup() {
   digitalWrite(PIN_PUMP_RELAY, pumpActiveLow ? HIGH : LOW);
   delay(150);
 
-  // Quick Stepper Startup Self-Test @ 15 RPM (768 full steps ~ 1.5 seconds smooth 135° rotation)
-  Serial.println("[DIAGNOSTICS] Testing 28BYJ-48 Stepper @ 15 RPM (Dual-Phase High-Torque)...");
-  for (int s = 0; s < 768; s++) {
-    int idx = s % 4;
-    digitalWrite(PIN_STEPPER_IN1, STEPPER_FULL_STEP[idx][0]);
-    digitalWrite(PIN_STEPPER_IN2, STEPPER_FULL_STEP[idx][1]);
-    digitalWrite(PIN_STEPPER_IN3, STEPPER_FULL_STEP[idx][2]);
-    digitalWrite(PIN_STEPPER_IN4, STEPPER_FULL_STEP[idx][3]);
-    delayMicroseconds(1953); // Exact 15 RPM full-step interval
-  }
+  // Quick Stepper Startup Self-Test using Stepper.h (Clockwise 512 steps, Counter-Clockwise -512 steps)
+  Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 15 RPM...");
+  motor.setSpeed(15);
+  Serial.println("  -> Clockwise rotation (512 steps)...");
+  motor.step(512);
+  delay(300);
+  Serial.println("  -> Counter-clockwise rotation (-512 steps)...");
+  motor.step(-512);
   setStepperActive(false);
-  Serial.println("[DIAGNOSTICS] Stepper 15 RPM verified.");
+  Serial.println("[DIAGNOSTICS] Stepper self-test complete.");
 
   // Flow Sensor Pin + Hardware Interrupt
   pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
