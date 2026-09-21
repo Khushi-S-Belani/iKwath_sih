@@ -557,8 +557,8 @@ void runStateMachine() {
       break;
 
     case PHASE_WATER_FILL:
-      // 2. Pump fills water until flow sensor reaches target 400 mL (or 25s timeout fallback)
-      if (currentWaterMl >= targetWaterVolumeMl || elapsedInPhase >= 25) {
+      // 2. Pump fills water until flow sensor reaches target 400 mL (with safety watchdog)
+      if (currentWaterMl >= targetWaterVolumeMl || elapsedInPhase >= 60) {
         setPump(false);
         Serial.printf("[FLOW COMPLETE] Measured: %.1f mL (Pulses: %lu)\n", currentWaterMl, flowPulseCount);
         setPhase(PHASE_SOAKING);
@@ -573,8 +573,8 @@ void runStateMachine() {
       break;
 
     case PHASE_HEATING:
-      // 4. Heater ON until DHT11 temperature reaches 35°C (or max 45s safety timeout)
-      if (currentTempC >= targetExtractionTemp || elapsedInPhase >= 45) {
+      // 4. Heater ON until DHT11 temperature reaches target °C (with safety watchdog)
+      if (currentTempC >= targetExtractionTemp || elapsedInPhase >= 120) {
         setHeater(false);
         Serial.printf("[HEATING COMPLETE] Reached %.1f °C!\n", currentTempC);
         setPhase(PHASE_STIRRING);

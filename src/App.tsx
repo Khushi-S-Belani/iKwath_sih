@@ -211,6 +211,8 @@ export default function App() {
       setCurrentSection('water-fill');
     } else if (brewState.phase === 'SOAKING' || brewState.phase === 'HEATING' || brewState.phase === 'STIRRING') {
       setCurrentSection('live-brew');
+    } else if (brewState.phase === 'REDUCTION') {
+      setCurrentSection('reduction');
     } else if (brewState.phase === 'FILTRATION' || brewState.phase === 'DISPENSING') {
       setCurrentSection('filtration');
     } else if (brewState.phase === 'COMPLETE') {

@@ -60,64 +60,79 @@ const INITIAL_STATE: LiveBrewState = {
   hardwareTelemetry: null,
 };
 
-// ─── DEMO phase definitions (exact intervals matching hardware sequence) ───────
-const DEMO_PHASES: { phase: BrewPhase; durationSec: number }[] = [
-  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — Flow sensor measuring 400 mL
-  { phase: 'SOAKING',    durationSec:  5 },  //  5 s — Timed soaking step
-  { phase: 'HEATING',    durationSec:  8 },  //  8 s — Heating until 35°C (DHT11)
-  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — 28BYJ-48 Stepper motor agitation
-  { phase: 'REDUCTION',  durationSec:  5 },  //  5 s — Timed reduction step
-  { phase: 'FILTRATION', durationSec:  5 },  //  5 s — SS316 filter transition
-  { phase: 'DISPENSING', durationSec:  5 },  //  5 s — Pump dispensing decoction
-  { phase: 'COMPLETE',   durationSec:  0 },
+// ─── Phase Definitions & Progression Rules ────────────────────────────────────
+// SENSOR-GATED STEPS: Only proceed when real-time sensor data meets target
+// TIMED GAP STEPS: Proceed after specified duration gap for natural processing
+const DEMO_PHASES: { phase: BrewPhase; isSensorGated: boolean; durationSec: number }[] = [
+  { phase: 'WATER_FILL',  isSensorGated: true,  durationSec: 10 }, // Sensor-gated: Flow sensor / Load cell to 400 mL
+  { phase: 'SOAKING',    isSensorGated: false, durationSec:  5 }, // Timed gap: 5s botanical maceration
+  { phase: 'HEATING',    isSensorGated: true,  durationSec:  8 }, // Sensor-gated: DHT11 temperature to target °C
+  { phase: 'STIRRING',   isSensorGated: false, durationSec: 10 }, // Component agitation: 10s 28BYJ-48 stepper
+  { phase: 'REDUCTION',  durationSec:  5, isSensorGated: false }, // Timed gap: 5s decoction mass loss tracking
+  { phase: 'FILTRATION', durationSec:  5, isSensorGated: false }, // Timed gap: 5s SS316 filter separation
+  { phase: 'DISPENSING', durationSec:  5, isSensorGated: false }, // Component dispense: 5s peristaltic pump
+  { phase: 'COMPLETE',   durationSec:  0, isSensorGated: false },
 ];
-const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 46 s
+const TOTAL_DEMO_SEC = 48; // ~48 s total baseline
 
 // ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
-function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): SensorData {
+function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targetWaterMl: number = 400, targetTempC: number = 35): SensorData {
   const s = { ...prev };
 
   switch (phase) {
-    case 'WATER_FILL':
+    case 'WATER_FILL': {
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
       s.product_valve = 'CLOSED';
       s.drain_valve = 'CLOSED';
-      s.temperature_c = 25 + (Math.random() - 0.5) * 0.3;
-      s.mass_g = Math.min(400, 50 + elapsed * 45 + (Math.random() - 0.5) * 2);
+      s.temperature_c = 25.0 + (Math.random() - 0.5) * 0.2;
+      // Real-time flow accumulation: ~45 mL/s until target reached
+      const newMass = Math.min(targetWaterMl, Math.max(s.mass_g, elapsed * 45 + (Math.random() - 0.5) * 2));
+      s.mass_g = parseFloat(newMass.toFixed(1));
+      s.water_ml = s.mass_g;
+      s.flow_rate_lpm = s.mass_g >= targetWaterMl ? 0 : 2.45 + (Math.random() - 0.5) * 0.15;
+      s.flow_pulses = Math.round(s.mass_g * 5.88);
       break;
+    }
 
     case 'SOAKING':
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
+      s.flow_rate_lpm = 0;
       s.temperature_c = 25.5 + (Math.random() - 0.5) * 0.2;
-      s.mass_g = 400 + (Math.random() - 0.5) * 1;
+      s.mass_g = targetWaterMl;
+      s.water_ml = targetWaterMl;
       break;
 
-    case 'HEATING':
+    case 'HEATING': {
       s.heater = 'ACTIVE';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = Math.min(35, 26 + elapsed * 1.2 + (Math.random() - 0.5) * 0.3);
-      s.mass_g = 400 - elapsed * 1.0;
+      s.flow_rate_lpm = 0;
+      // Real-time temperature heating curve: ~1.4°C/s until targetTempC reached
+      const currentT = prev.temperature_c >= 25 ? prev.temperature_c : 25.0;
+      const newTemp = Math.min(targetTempC, currentT + 1.4 + (Math.random() - 0.5) * 0.2);
+      s.temperature_c = parseFloat(newTemp.toFixed(1));
+      s.mass_g = Math.max(targetWaterMl * 0.95, targetWaterMl - elapsed * 0.8);
       break;
+    }
 
     case 'STIRRING':
       s.heater = 'OFF';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
-      s.temperature_c = 35.0 + (Math.random() - 0.5) * 0.3;
-      s.mass_g = Math.max(300, 390 - elapsed * 3.0);
+      s.temperature_c = targetTempC + (Math.random() - 0.5) * 0.2;
+      s.mass_g = Math.max(targetWaterMl * 0.85, targetWaterMl - elapsed * 2.0);
       break;
 
     case 'REDUCTION':
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = 34.5 + (Math.random() - 0.5) * 0.3;
-      s.mass_g = Math.max(102, 360 - elapsed * 15);
+      s.temperature_c = targetTempC - (Math.random() * 0.5);
+      s.mass_g = Math.max(s.target_mass_g || 102, (targetWaterMl * 0.8) - elapsed * 15);
       break;
 
     case 'FILTRATION':
@@ -125,8 +140,9 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
       s.product_valve = 'OPEN';
-      s.temperature_c = Math.max(30, prev.temperature_c - 0.5);
-      s.mass_g = Math.max(100, prev.mass_g - 2);
+      s.drain_valve = 'CLOSED';
+      s.temperature_c = Math.max(30, prev.temperature_c - 0.4);
+      s.mass_g = Math.max(100, prev.mass_g - 1);
       break;
 
     case 'DISPENSING':
@@ -134,6 +150,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
       s.product_valve = 'OPEN';
+      s.drain_valve = 'CLOSED';
       s.temperature_c = 30.0;
       s.mass_g = prev.mass_g;
       break;
@@ -144,7 +161,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.pump = 'ACTIVE';
       s.product_valve = 'CLOSED';
       s.drain_valve = 'OPEN';
-      s.temperature_c = Math.max(30, prev.temperature_c - 2);
+      s.temperature_c = Math.max(25, prev.temperature_c - 2);
       s.mass_g = 0;
       s.cleaning_required = true;
       break;
@@ -194,6 +211,8 @@ export function useMachineState() {
   const phaseIdxRef     = useRef(0);
   const phaseElapsedRef = useRef(0);
   const totalElapsedRef = useRef(0);
+  const targetWaterRef  = useRef(400);
+  const targetTempRef   = useRef(35);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -216,21 +235,23 @@ export function useMachineState() {
       stage: phaseToStage(next.phase),
       elapsed_sec: totalElapsedRef.current,
       estimated_remaining_sec: Math.max(0, TOTAL_DEMO_SEC - totalElapsedRef.current),
-      sensor: evolveSensor(prevSensor, next.phase, 0),
+      sensor: evolveSensor(prevSensor, next.phase, 0, targetWaterRef.current, targetTempRef.current),
     };
   }, [stopTimer]);
 
-  // ─── Start brew (Physical ESP32 + Software fallback) ───────────────────────
+  // ─── Start brew (Physical ESP32 + Real-Time Software prototype) ────────────
   const startBrewSimulation = useCallback((
     pod_id: string,
     formulation_id: string,
     waterMl: number = 400,
-    tempC: number = 90
+    tempC: number = 35
   ) => {
     stopTimer();
     phaseIdxRef.current     = 0;
     phaseElapsedRef.current = 0;
     totalElapsedRef.current = 0;
+    targetWaterRef.current  = waterMl;
+    targetTempRef.current   = tempC;
 
     // Trigger physical hardware brew if ESP32 connected
     if (esp32Serial.isConnected()) {
@@ -247,10 +268,10 @@ export function useMachineState() {
       formulation_id,
       paused: false,
       fault: null,
-      sensor: { ...INITIAL_SENSOR, mass_g: 0, target_mass_g: Math.round(waterMl * 0.25) },
+      sensor: { ...INITIAL_SENSOR, mass_g: 0, water_ml: 0, target_mass_g: Math.round(waterMl * 0.25) },
     }));
 
-    // If hardware is NOT connected, run software timer simulation
+    // If hardware is NOT connected, run real-time sensor/time-gated progression
     if (!esp32Serial.isConnected()) {
       timerRef.current = setInterval(() => {
         setState((prev) => {
@@ -265,9 +286,31 @@ export function useMachineState() {
             return { ...prev, phase: 'COMPLETE', stage: 'READY', estimated_remaining_sec: 0 };
           }
 
-          // Phase finished? advance
-          if (phaseElapsedRef.current >= cur.durationSec) {
-            const patch = advancePhase(prev.sensor);
+          // Evolve real-time sensor state
+          const evolvedSensor = evolveSensor(
+            prev.sensor,
+            cur.phase,
+            phaseElapsedRef.current,
+            targetWaterRef.current,
+            targetTempRef.current
+          );
+
+          // Real-time Sensor-Gated vs Timed-Gap Transition Check:
+          let canAdvance = false;
+
+          if (cur.phase === 'WATER_FILL') {
+            // SENSOR GATED: Only advance after measured water reaches target mL (400 mL)
+            canAdvance = evolvedSensor.mass_g >= targetWaterRef.current;
+          } else if (cur.phase === 'HEATING') {
+            // SENSOR GATED: Only advance after real-time temperature reaches target extraction temp (°C)
+            canAdvance = evolvedSensor.temperature_c >= targetTempRef.current;
+          } else {
+            // TIMED GAP STEP: Advances normally after specified duration gap
+            canAdvance = phaseElapsedRef.current >= cur.durationSec;
+          }
+
+          if (canAdvance) {
+            const patch = advancePhase(evolvedSensor);
             return patch ? { ...prev, ...patch } : prev;
           }
 
@@ -275,7 +318,7 @@ export function useMachineState() {
             ...prev,
             elapsed_sec: totalElapsedRef.current,
             estimated_remaining_sec: Math.max(0, TOTAL_DEMO_SEC - totalElapsedRef.current),
-            sensor: evolveSensor(prev.sensor, cur.phase, phaseElapsedRef.current),
+            sensor: evolvedSensor,
           };
         });
       }, 1000);
