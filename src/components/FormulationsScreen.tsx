@@ -28,22 +28,40 @@ export const FormulationsScreen: React.FC<FormulationsScreenProps> = ({ onSelect
               role="button"
               tabIndex={0}
               aria-label={`View ${f.name}`}
+              style={{ display: 'flex', gap: '14px', alignItems: 'center' }}
             >
-              <div className="formulations-row-name">{f.name}</div>
-              <div className="formulations-row-meta">
-                <span>{f.pod_id}</span>
-                <span>·</span>
-                <span>{f.profile_revision}</span>
-                <span>·</span>
-                <span>{f.usage_count} runs</span>
-              </div>
-              <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
-                <StatusChip
-                  label={f.status}
-                  variant={f.status === 'ACTIVE' ? 'active' : f.status === 'DEPRECATED' ? 'fault' : 'warning'}
-                  size="sm"
+              {f.image && (
+                <img
+                  src={f.image}
+                  alt={f.name}
+                  style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '12px',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                    border: '1.5px solid rgba(0, 0, 0, 0.08)',
+                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
+                  }}
                 />
-                {f.validated && <StatusChip label="VALIDATED" variant="active" size="sm" />}
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="formulations-row-name">{f.name}</div>
+                <div className="formulations-row-meta">
+                  <span>{f.pod_id}</span>
+                  <span>·</span>
+                  <span>{f.profile_revision}</span>
+                  <span>·</span>
+                  <span>{f.usage_count} runs</span>
+                </div>
+                <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
+                  <StatusChip
+                    label={f.status}
+                    variant={f.status === 'ACTIVE' ? 'active' : f.status === 'DEPRECATED' ? 'fault' : 'warning'}
+                    size="sm"
+                  />
+                  {f.validated && <StatusChip label="VALIDATED" variant="active" size="sm" />}
+                </div>
               </div>
             </div>
           ))}
@@ -53,8 +71,27 @@ export const FormulationsScreen: React.FC<FormulationsScreenProps> = ({ onSelect
         <div className="formulations-detail">
           {selected ? (
             <>
-              <div className="formulations-detail-name">{selected.name}</div>
-              <div className="formulations-detail-sub">{selected.description}</div>
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' }}>
+                {selected.image && (
+                  <img
+                    src={selected.image}
+                    alt={selected.name}
+                    style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '12px',
+                      objectFit: 'cover',
+                      border: '1.5px solid rgba(0, 0, 0, 0.08)',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <div>
+                  <div className="formulations-detail-name">{selected.name}</div>
+                  <div className="formulations-detail-sub">{selected.description}</div>
+                </div>
+              </div>
 
               <div className="formulations-params">
                 {[
