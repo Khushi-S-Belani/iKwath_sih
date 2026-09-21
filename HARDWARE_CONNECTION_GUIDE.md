@@ -100,14 +100,14 @@ The 2-channel relay controls the high-power loads (**Heater** and **Water Pump**
 
 ---
 
-### D. 28BYJ-48 Stepper Motor + ULN2003A Driver (Stirrer)
+### D. 28BYJ-48 Stepper Motor + ULN2003A Driver (Stirrer @ 15 RPM)
 ```
    ULN2003A Driver Board       ESP32 DevKit V1
  +-----------------------+    +----------------+
- | IN1                   |--->| GPIO 13        |
- | IN2                   |--->| GPIO 12        |
- | IN3                   |--->| GPIO 19        |
- | IN4                   |--->| GPIO 23        |
+ | IN1                   |--->| GPIO 13 (Blue) |
+ | IN2                   |--->| GPIO 12 (Pink) |
+ | IN3                   |--->| GPIO 19 (Yellow)
+ | IN4                   |--->| GPIO 23 (Orange)
  | + (VCC)               |--->| External +5V   |
  | - (GND)               |--->| Common GND     |
  +-----------------------+    +----------------+
@@ -116,8 +116,10 @@ The 2-channel relay controls the high-power loads (**Heater** and **Water Pump**
              v
      28BYJ-48 Stepper
 ```
-- Performs half-stepping bidirectional agitation for **10 seconds** during `PHASE_STIRRING`.
-- Automatically de-energizes all 4 coils (`LOW`) when stirring ends to keep the motor cool.
+- **High-Torque Dual-Phase Drive**: Calibrated to exact **15.0 RPM** (1953 µs step interval, 2048 full-steps per 360° output revolution) with two coils energized simultaneously for maximum torque.
+- **Bi-directional Agitation**: Rotates smoothly and reverses direction every full 360° revolution during the 10-second `PHASE_STIRRING` stage.
+- **ULN2003A Power Jumper**: Ensure the 2-pin jumper cap on the top right of the ULN2003 board is **installed (closed)** and connected to +5V (not 3.3V).
+- **Automatic De-energize**: Automatically de-energizes all 4 coils (`LOW`) when stirring ends to keep the motor and driver cool.
 
 ---
 

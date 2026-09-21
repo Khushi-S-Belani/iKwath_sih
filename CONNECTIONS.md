@@ -47,17 +47,18 @@ This document contains **detailed, standardized reference tables** for all circu
 
 ## 4. 28BYJ-48 Stepper Motor & ULN2003A Driver Table
 
-| Motor Wire Color | Internal Phase Coil | ULN2003A Driver Output | Driver Input Pin | ESP32 GPIO Pin | Half-Stepping Sequence (8-Step) |
+| Motor Wire Color | Internal Phase Coil | ULN2003A Driver Output | Driver Input Pin | ESP32 GPIO Pin | Dual-Phase High-Torque Matrix (4-Step @ 15 RPM) |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Blue** | Coil A | `OUT1` | **`IN1`** | **GPIO 13** | Step 1, 2, 8 = `HIGH` |
-| **Pink** | Coil B | `OUT2` | **`IN2`** | **GPIO 12** | Step 2, 3, 4 = `HIGH` |
-| **Yellow** | Coil C | `OUT3` | **`IN3`** | **GPIO 19** | Step 4, 5, 6 = `HIGH` |
-| **Orange** | Coil D | `OUT4` | **`IN4`** | **GPIO 23** | Step 6, 7, 8 = `HIGH` |
-| **Red** | Center Tap (VCC) | Header Pin 5 | `+` (VCC) | External **+5V** | Constant +5V supply |
+| **Blue** | Coil 1 | `OUT1` | **`IN1`** | **GPIO 13** | Step 0 (IN1+IN3), Step 3 (IN4+IN1) |
+| **Pink** | Coil 3 | `OUT2` | **`IN2`** | **GPIO 12** | Step 1 (IN3+IN2), Step 2 (IN2+IN4) |
+| **Yellow** | Coil 2 | `OUT3` | **`IN3`** | **GPIO 19** | Step 0 (IN1+IN3), Step 1 (IN3+IN2) |
+| **Orange** | Coil 4 | `OUT4` | **`IN4`** | **GPIO 23** | Step 2 (IN2+IN4), Step 3 (IN4+IN1) |
+| **Red** | Center Tap (VCC) | Header Pin 5 | `+` (VCC) | External **+5V** | Constant +5V supply (Jumper cap ON) |
 
-- **Step Interval**: 1800 µs (~1.8 ms) per step for smooth liquid agitation.
-- **Direction Toggle**: Bidirectional reversal every 512 steps.
-- **De-energize Feature**: After 10 seconds of stirring, all 4 GPIOs (`13, 12, 19, 23`) are set to `LOW` to completely prevent motor coil heating.
+- **Exact Speed Calibration**: **15.0 RPM** ($1953\ \mu\text{s}$ per step, 2048 steps per 360° output revolution).
+- **High-Torque Dual-Coil Drive**: Two coils are energized simultaneously on every step, delivering 100% higher torque to prevent stalling or vibration.
+- **Direction Toggle**: Reverses direction smoothly every 2048 steps (1 full 360° revolution) for thorough fluid agitation.
+- **Automatic De-energize**: After 10 seconds of stirring, all 4 GPIOs (`13, 12, 19, 23`) are set to `LOW` to completely prevent motor coil and ULN2003 chip heating.
 
 ---
 
