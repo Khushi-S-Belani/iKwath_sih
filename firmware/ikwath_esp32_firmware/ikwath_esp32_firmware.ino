@@ -1,7 +1,7 @@
 /*
   =============================================================================
   iKwath - Smart Automated Ayurvedic Kwatha / Decoction Machine
-  ESP32 Master Controller Firmware (v4.2 - Stepper.h Integration @ 15 RPM)
+  ESP32 Master Controller Firmware (v4.3 - Active Batch Agitation @ 15 RPM)
   =============================================================================
   Hardware Pinout Mapping:
   - GPIO 2:  Onboard Blue Status LED (Solid ON when running)
@@ -27,7 +27,7 @@
   4. Water Fill: Relay 2 turns pump ON; flows 400 mL via flow sensor on GPIO 18.
   5. Soaking: 5-second timed soaking step.
   6. Heating: Relay 1 turns heater ON; DHT11 on GPIO 15 monitors until 35°C is reached.
-  7. Stirring: 28BYJ-48 stepper motor stirs @ 15 RPM for 10 seconds via Stepper.h.
+  7. Stirring: 28BYJ-48 stepper motor stirs (512 steps CW <-> 512 steps CCW) for 10 seconds.
   8. Reduction, Filtration & Dispense: 5s pause each, then ready & 3 victory beeps!
   =============================================================================
 */
@@ -54,7 +54,7 @@ const int IN2 = 12; // Pink
 const int IN3 = 19; // Yellow
 const int IN4 = 23; // Orange
 
-// 28BYJ-48: 2048 full steps per 360° output shaft revolution (4-step sequence in Stepper.h)
+// 28BYJ-48: 2048 full steps per 360° output shaft revolution
 const int STEPS_PER_REV = 2048;
 
 // IMPORTANT ORDER: IN1 (13), IN3 (19), IN2 (12), IN4 (23) for 28BYJ-48 unipolar coils
@@ -211,9 +211,7 @@ int currentPodAngle = 0;
 
 // Stepper Motor State via Stepper.h
 bool stepperActive = false;
-int stepperDirection = 1;     // +1 = Clockwise, -1 = Counter-clockwise
-int stepperStepCounter = 0;
-float stepperSpeedRpm = 15.0f; // Exact 15 RPM target
+float stepperSpeedRpm = 12.0f; // 12-15 RPM agitation speed
 
 // Button Debounce
 int lastButtonState = HIGH;
@@ -248,7 +246,7 @@ void beep(int durationMs, int count = 1, int pauseMs = 80) {
 }
 
 // =============================================================================
-// STEPPER MOTOR CONTROLLER (Stepper.h Driver @ 15 RPM)
+// STEPPER MOTOR CONTROLLER (Stepper.h Driver @ 12-15 RPM)
 // =============================================================================
 void setStepperSpeed(float rpm) {
   if (rpm < 1.0f) rpm = 1.0f;
@@ -269,22 +267,7 @@ void setStepperActive(bool on) {
     Serial.println("[STEPPER] Motor STOPPED & all coils de-energized (LOW).");
   } else {
     motor.setSpeed((long)stepperSpeedRpm);
-    Serial.printf("[STEPPER] Motor STARTING @ %.0f RPM (Stirring active)...\n", stepperSpeedRpm);
-  }
-}
-
-// Non-blocking single-step updates in main loop
-void updateStepper() {
-  if (!stepperActive) return;
-
-  // Advance 1 step per cycle
-  motor.step(stepperDirection * 1);
-
-  // Bi-directional agitation: reverse direction every 1024 steps (half revolution)
-  stepperStepCounter++;
-  if (stepperStepCounter >= 1024) {
-    stepperStepCounter = 0;
-    stepperDirection = -stepperDirection;
+    Serial.printf("[STEPPER] Motor STARTING @ %.0f RPM...\n", stepperSpeedRpm);
   }
 }
 
@@ -462,13 +445,35 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_STIRRING:
-      // 5. 28BYJ-48 Stepper motor stirs @ 15 RPM for 10 seconds via Stepper.h
+      // 5. 28BYJ-48 Stepper motor active stirring
       setPump(false);
       setHeater(false);
-      setStepperActive(true);
+      stepperActive = true;
       beep(100, 2);
-      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING @ 15 RPM for 10 seconds...");
-      break;
+      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING for 10 seconds...");
+      sendTelemetry();
+
+      // Active Stirring Execution for exactly 10 seconds (512 steps CW <-> 512 steps CCW)
+      {
+        unsigned long stirringStart = millis();
+        motor.setSpeed(12); // Smooth 12 RPM speed
+        
+        while (millis() - stirringStart < 10000) {
+          Serial.println("[STIRRER] Clockwise agitation (512 steps)...");
+          motor.step(512);
+          sendTelemetry();
+          if (millis() - stirringStart >= 10000) break;
+
+          Serial.println("[STIRRER] Counter-clockwise agitation (-512 steps)...");
+          motor.step(-512);
+          sendTelemetry();
+        }
+      }
+
+      setStepperActive(false);
+      Serial.println("[STIRRING COMPLETE] 10s agitation finished.");
+      setPhase(PHASE_REDUCTION);
+      return;
 
     case PHASE_REDUCTION:
       // 6. Reduction step (5 seconds)
@@ -577,12 +582,7 @@ void runStateMachine() {
       break;
 
     case PHASE_STIRRING:
-      // 5. Stepper motor 28BYJ-48 stirs for exactly 10 seconds @ 15 RPM
-      if (elapsedInPhase >= 10) {
-        setStepperActive(false);
-        Serial.println("[STIRRING COMPLETE] 10s agitation finished.");
-        setPhase(PHASE_REDUCTION);
-      }
+      // Handled inside setPhase(PHASE_STIRRING)
       break;
 
     case PHASE_REDUCTION:
@@ -745,13 +745,20 @@ void processSerialCommand(String cmd) {
       setHeater(false);
       return;
     } else if (action == "stirrer_on" || action == "stepper_on" || action == "test_stirrer" || action == "test_stepper") {
-      setStepperActive(true);
+      Serial.println("[TEST] Running Stepper Motor Agitation...");
+      stepperActive = true;
+      sendTelemetry();
+      motor.setSpeed(12);
+      motor.step(512);
+      motor.step(-512);
+      setStepperActive(false);
+      sendTelemetry();
       return;
     } else if (action == "stirrer_off" || action == "stepper_off") {
       setStepperActive(false);
       return;
     } else if (action == "set_stepper_rpm") {
-      float rpm = getJsonFloat(cmd, "rpm", 15.0f);
+      float rpm = getJsonFloat(cmd, "rpm", 12.0f);
       setStepperSpeed(rpm);
       return;
     } else if (action == "pod_open" || action == "test_pod") {
@@ -791,7 +798,6 @@ void processSerialCommand(String cmd) {
   if (cmd.equalsIgnoreCase("START_BREW") || cmd.equalsIgnoreCase("START")) {
     startBrewProcess();
   } else if (cmd.startsWith("START:")) {
-    // START:recipe_id:water_ml:temp_c
     int firstColon = cmd.indexOf(':');
     int secondColon = cmd.indexOf(':', firstColon + 1);
     int thirdColon = cmd.indexOf(':', secondColon + 1);
@@ -821,7 +827,13 @@ void processSerialCommand(String cmd) {
   } else if (cmd.equalsIgnoreCase("HEATER:OFF") || cmd.equalsIgnoreCase("RELAY:OFF") || cmd.equalsIgnoreCase("RELAY1:OFF")) {
     setHeater(false);
   } else if (cmd.equalsIgnoreCase("STEPPER:ON") || cmd.equalsIgnoreCase("STIRRER:ON")) {
-    setStepperActive(true);
+    stepperActive = true;
+    sendTelemetry();
+    motor.setSpeed(12);
+    motor.step(512);
+    motor.step(-512);
+    setStepperActive(false);
+    sendTelemetry();
   } else if (cmd.equalsIgnoreCase("STEPPER:OFF") || cmd.equalsIgnoreCase("STIRRER:OFF")) {
     setStepperActive(false);
   } else if (cmd.startsWith("STEPPER:RPM:")) {
@@ -846,7 +858,7 @@ void processSerialCommand(String cmd) {
     tempSimulationMode = !tempSimulationMode;
     Serial.printf("[CONFIG] Temp Simulation: %s\n", tempSimulationMode ? "ENABLED" : "DISABLED");
   } else if (cmd.equalsIgnoreCase("PING")) {
-    Serial.println("{\"type\":\"pong\",\"version\":\"4.2\"}");
+    Serial.println("{\"type\":\"pong\",\"version\":\"4.3\"}");
   }
 }
 
@@ -859,7 +871,7 @@ void setup() {
 
   Serial.println("\n=============================================================");
   Serial.println("   iKwath - Smart Automated Ayurvedic Decoction Machine       ");
-  Serial.println("   ESP32 Master Controller Firmware v4.2 (Stepper.h @ 15 RPM) ");
+  Serial.println("   ESP32 Master Controller Firmware v4.3                      ");
   Serial.println("=============================================================");
 
   // Initialize GPIO Pins
@@ -893,11 +905,11 @@ void setup() {
   delay(150);
 
   // Quick Stepper Startup Self-Test using Stepper.h (Clockwise 512 steps, Counter-Clockwise -512 steps)
-  Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 15 RPM...");
-  motor.setSpeed(15);
+  Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 12 RPM...");
+  motor.setSpeed(12);
   Serial.println("  -> Clockwise rotation (512 steps)...");
   motor.step(512);
-  delay(300);
+  delay(200);
   Serial.println("  -> Counter-clockwise rotation (-512 steps)...");
   motor.step(-512);
   setStepperActive(false);
@@ -943,13 +955,10 @@ void loop() {
   updateTemperature();
   updateFlowSensor();
 
-  // 4. Stepper Agitation Motor Execution
-  updateStepper();
-
-  // 5. Automated Decoction State Machine
+  // 4. Automated Decoction State Machine
   runStateMachine();
 
-  // 6. Broadcast Telemetry Every 250ms
+  // 5. Broadcast Telemetry Every 250ms
   unsigned long now = millis();
   if (now - lastTelemetryTime >= 250) {
     lastTelemetryTime = now;
