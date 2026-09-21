@@ -41,9 +41,77 @@ export default function App() {
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [isHardwareConnected, setIsHardwareConnected] = useState(esp32Serial.isConnected());
   const outerWrapRef = useRef<HTMLDivElement>(null);
+  const currentSectionRef = useRef<NavSection>(currentSection);
+
+  useEffect(() => {
+    currentSectionRef.current = currentSection;
+  }, [currentSection]);
 
   const machine = useMachineState();
   const { state: brewState } = machine;
+
+  // Step 1: Select Kwatha — go to formulations screen first
+  const handleInsertPod = useCallback(() => {
+    setCurrentSection('formulations');
+  }, []);
+
+  // Step 2: Formulation selected → load profile + scan pod
+  const handleFormulationSelected = useCallback((f: FormulationProfile) => {
+    setSelectedFormulation(f);
+    setPodState('SCANNING');
+    setCurrentSection('pod');
+    machine.scanPod(f.pod_id, f.id);
+    setTimeout(() => setPodState('DETECTED'), 1500);
+  }, [machine]);
+
+  const handlePodRetry = useCallback(() => {
+    setPodState('SCANNING');
+    setTimeout(() => setPodState('DETECTED'), 1500);
+  }, []);
+
+  const handlePodConfirm = useCallback(() => {
+    setPodState('IDLE');
+    setCurrentSection('brew-confirm');
+  }, []);
+
+  const handleStartBrew = useCallback(() => {
+    setMassHistory([]);
+    setTempHistory([]);
+    machine.startBrewSimulation(
+      selectedFormulation.pod_id,
+      selectedFormulation.id,
+      selectedFormulation.water_ml,
+      selectedFormulation.extraction_temp_c
+    );
+    setCurrentSection('live-brew');
+  }, [selectedFormulation, machine]);
+
+  const handleCancelBrew = useCallback(() => {
+    machine.cancelBrew();
+    setPodState('IDLE');
+    setCurrentSection('home');
+  }, [machine]);
+
+  const handleStartCleaning = useCallback(() => {
+    setCleaningPhase('RINSING');
+    setCurrentSection('cleaning');
+    machine.startCleaning();
+    setTimeout(() => setCleaningPhase('DRAINING'), 4000);
+    setTimeout(() => {
+      setCleaningPhase('COMPLETE');
+      if (currentBrewRecord) {
+        setCurrentBrewRecord((prev) => prev ? { ...prev, cleaning_completed: true } : null);
+        setBrewHistory((prev) => prev.map((r) => r.brew_id === currentBrewRecord.brew_id ? { ...r, cleaning_completed: true } : r));
+      }
+    }, 8000);
+  }, [machine, currentBrewRecord]);
+
+  const handleCleaningComplete = useCallback(() => {
+    setCleaningPhase('REQUIRED');
+    setPodState('IDLE');
+    setCurrentSection('home');
+    machine.resetToIdle();
+  }, [machine]);
 
   // Listen to ESP32 connection state & auto-reconnect on page load
   useEffect(() => {
@@ -85,7 +153,19 @@ export default function App() {
     // Listen to physical Push Button events from ESP32 (GPIO 4)
     const unsubButton = esp32Serial.onButtonEvent((event, data) => {
       if (event === 'start_pressed') {
-        handleStartBrew();
+        const activeSec = currentSectionRef.current;
+        if (activeSec === 'home') {
+          // Push button ONs / awakens the mechanism and shows Kadha selection catalog on display
+          setCurrentSection('formulations');
+        } else if (activeSec === 'formulations' || activeSec === 'pod' || activeSec === 'brew-confirm') {
+          // On selection or pod screen -> Start automated decoction process
+          handleStartBrew();
+        } else if (brewState.phase !== 'IDLE' && brewState.phase !== 'READY' && brewState.phase !== 'COMPLETE') {
+          // During brew -> toggle pause/resume
+          machine.setPaused(!brewState.paused);
+        } else {
+          setCurrentSection('formulations');
+        }
       } else if (event === 'reset_pressed') {
         handleCancelBrew();
       } else if (event === 'pause_pressed') {
@@ -98,7 +178,7 @@ export default function App() {
       unsubKeypad();
       unsubButton();
     };
-  }, [selectedFormulation, brewState.phase, brewState.paused]);
+  }, [selectedFormulation, brewState.phase, brewState.paused, handleStartBrew, handleCancelBrew, handleStartCleaning, machine]);
 
   // Sync recipe to ESP32 whenever formulation selection changes
   useEffect(() => {
@@ -167,69 +247,6 @@ export default function App() {
       setCurrentSection('brew-passport');
     }
   }, [brewState.phase]);
-
-  // Step 1: Select Kwatha — go to formulations screen first
-  const handleInsertPod = useCallback(() => {
-    setCurrentSection('formulations');
-  }, []);
-
-  // Step 2: Formulation selected → load profile + scan pod
-  const handleFormulationSelected = useCallback((f: FormulationProfile) => {
-    setSelectedFormulation(f);
-    setPodState('SCANNING');
-    setCurrentSection('pod');
-    machine.scanPod(f.pod_id, f.id);
-    setTimeout(() => setPodState('DETECTED'), 1500);
-  }, [machine]);
-
-  const handlePodRetry = useCallback(() => {
-    setPodState('SCANNING');
-    setTimeout(() => setPodState('DETECTED'), 1500);
-  }, []);
-
-  const handlePodConfirm = useCallback(() => {
-    setPodState('IDLE');
-    setCurrentSection('brew-confirm');
-  }, []);
-
-  const handleStartBrew = useCallback(() => {
-    setMassHistory([]);
-    setTempHistory([]);
-    machine.startBrewSimulation(
-      selectedFormulation.pod_id,
-      selectedFormulation.id,
-      selectedFormulation.water_ml,
-      selectedFormulation.extraction_temp_c
-    );
-    setCurrentSection('live-brew');
-  }, [selectedFormulation, machine]);
-
-  const handleCancelBrew = useCallback(() => {
-    machine.cancelBrew();
-    setPodState('IDLE');
-    setCurrentSection('home');
-  }, [machine]);
-
-  const handleStartCleaning = useCallback(() => {
-    setCleaningPhase('RINSING');
-    setCurrentSection('cleaning');
-    machine.startCleaning();
-    setTimeout(() => setCleaningPhase('DRAINING'), 4000);
-    setTimeout(() => {
-      setCleaningPhase('COMPLETE');
-      if (currentBrewRecord) {
-        setCurrentBrewRecord((prev) => prev ? { ...prev, cleaning_completed: true } : null);
-        setBrewHistory((prev) => prev.map((r) => r.brew_id === currentBrewRecord.brew_id ? { ...r, cleaning_completed: true } : r));
-      }
-    }, 8000);
-  }, [machine, currentBrewRecord]);
-
-  const handleCleaningComplete = useCallback(() => {
-    setCleaningPhase('REQUIRED');
-    setPodState('IDLE');
-    setCurrentSection('home');
-    machine.resetToIdle();
-  }, [machine]);
 
   // Clock
   useEffect(() => {

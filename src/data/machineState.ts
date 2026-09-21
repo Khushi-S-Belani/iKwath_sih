@@ -60,18 +60,18 @@ const INITIAL_STATE: LiveBrewState = {
   hardwareTelemetry: null,
 };
 
-// ─── DEMO phase definitions (whole seconds, clearly visible) ──────────────────
+// ─── DEMO phase definitions (exact intervals matching hardware sequence) ───────
 const DEMO_PHASES: { phase: BrewPhase; durationSec: number }[] = [
-  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — load cell / flow sensor measuring water
-  { phase: 'SOAKING',    durationSec: 10 },  // 10 s — soak time per formulation
-  { phase: 'HEATING',    durationSec: 10 },  // 10 s — induction heating + DS18B20 feedback
-  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — agitator stirring during extraction
-  { phase: 'REDUCTION',  durationSec: 12 },  // 12 s — mass & volume endpoint detection
-  { phase: 'FILTRATION', durationSec:  8 },  //  8 s — SS316 filter, bottom outlet
-  { phase: 'DISPENSING', durationSec:  6 },  //  6 s — peristaltic pump dispense
+  { phase: 'WATER_FILL',  durationSec:  8 },  //  8 s — Flow sensor measuring 400 mL
+  { phase: 'SOAKING',    durationSec:  5 },  //  5 s — Timed soaking step
+  { phase: 'HEATING',    durationSec:  8 },  //  8 s — Heating until 35°C (DHT11)
+  { phase: 'STIRRING',   durationSec: 10 },  // 10 s — 28BYJ-48 Stepper motor agitation
+  { phase: 'REDUCTION',  durationSec:  5 },  //  5 s — Timed reduction step
+  { phase: 'FILTRATION', durationSec:  5 },  //  5 s — SS316 filter transition
+  { phase: 'DISPENSING', durationSec:  5 },  //  5 s — Pump dispensing decoction
   { phase: 'COMPLETE',   durationSec:  0 },
 ];
-const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 64 s
+const TOTAL_DEMO_SEC = DEMO_PHASES.reduce((a, b) => a + b.durationSec, 0); // 46 s
 
 // ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
 function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): SensorData {
@@ -84,40 +84,40 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.pump = 'ACTIVE';
       s.product_valve = 'CLOSED';
       s.drain_valve = 'CLOSED';
-      s.temperature_c = 24 + (Math.random() - 0.5) * 0.3;
-      s.mass_g = Math.min(400, 50 + elapsed * 44 + (Math.random() - 0.5) * 2);
+      s.temperature_c = 25 + (Math.random() - 0.5) * 0.3;
+      s.mass_g = Math.min(400, 50 + elapsed * 45 + (Math.random() - 0.5) * 2);
       break;
 
     case 'SOAKING':
-      s.heater = 'ACTIVE';
+      s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = Math.min(60, 25 + elapsed * 3.5 + (Math.random() - 0.5) * 0.5);
-      s.mass_g = 400 + (Math.random() - 0.5) * 2;
+      s.temperature_c = 25.5 + (Math.random() - 0.5) * 0.2;
+      s.mass_g = 400 + (Math.random() - 0.5) * 1;
       break;
 
     case 'HEATING':
       s.heater = 'ACTIVE';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = Math.min(90, 60 + elapsed * 3 + (Math.random() - 0.5) * 0.5);
-      s.mass_g = 400 - elapsed * 1.5 + (Math.random() - 0.5) * 1.5;
+      s.temperature_c = Math.min(35, 26 + elapsed * 1.2 + (Math.random() - 0.5) * 0.3);
+      s.mass_g = 400 - elapsed * 1.0;
       break;
 
     case 'STIRRING':
-      s.heater = 'ACTIVE';
+      s.heater = 'OFF';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
-      s.temperature_c = 88 + Math.sin(elapsed * 0.3) * 1.5 + (Math.random() - 0.5) * 0.4;
-      s.mass_g = Math.max(350, 385 - elapsed * 3.5 + (Math.random() - 0.5) * 2);
+      s.temperature_c = 35.0 + (Math.random() - 0.5) * 0.3;
+      s.mass_g = Math.max(300, 390 - elapsed * 3.0);
       break;
 
     case 'REDUCTION':
-      s.heater = 'ACTIVE';
-      s.stirrer = 'ACTIVE';
+      s.heater = 'OFF';
+      s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = 89 + Math.sin(elapsed * 0.2) * 1.0 + (Math.random() - 0.5) * 0.3;
-      s.mass_g = Math.max(102, 340 - elapsed * 18 + (Math.random() - 0.5) * 3);
+      s.temperature_c = 34.5 + (Math.random() - 0.5) * 0.3;
+      s.mass_g = Math.max(102, 360 - elapsed * 15);
       break;
 
     case 'FILTRATION':
@@ -125,8 +125,8 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
       s.product_valve = 'OPEN';
-      s.temperature_c = Math.max(60, prev.temperature_c - 1.5 + (Math.random() - 0.5) * 0.3);
-      s.mass_g = Math.max(100, prev.mass_g - 2 + (Math.random() - 0.5));
+      s.temperature_c = Math.max(30, prev.temperature_c - 0.5);
+      s.mass_g = Math.max(100, prev.mass_g - 2);
       break;
 
     case 'DISPENSING':
@@ -134,7 +134,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number): Sens
       s.stirrer = 'OFF';
       s.pump = 'ACTIVE';
       s.product_valve = 'OPEN';
-      s.temperature_c = Math.max(55, prev.temperature_c - 0.5);
+      s.temperature_c = 30.0;
       s.mass_g = prev.mass_g;
       break;
 

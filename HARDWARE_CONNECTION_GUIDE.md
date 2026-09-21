@@ -1,171 +1,75 @@
-# iKwath ESP32 Hardware Connection & Wiring Guide
+# iKwath ESP32 Hardware Connection & Wiring Guide (v4.0)
 
-This guide details the complete circuit connections, pinouts, power distribution, and component specifications for interfacing your physical hardware with the **iKwath SIH Decoction Machine System**.
-
----
-
-## 1. Components List & Specifications
-
-| Component | Quantity | Operating Voltage | Purpose / Role |
-| :--- | :---: | :---: | :--- |
-| **ESP32 DevKit V1 (30 or 38 pin)** | 1 | 5V (MicroUSB/Vin) / 3.3V Logic | Main Microcontroller |
-| **Push Button** | 1 | 3.3V Logic | Start / Pause / Reset Trigger (Internal Pull-Up) |
-| **Peristaltic / Sado DC Pump** | 1 | 12V DC (or 5V DC) | Water intake & dispensing through 6mm ID pipe |
-| **Hall Flow Sensor (6mm ID)** | 1 | 5V / 3.3V DC | Real-time water volume pulse counter |
-| **Micro Servo 1 (SG90 / MG90S / MG995)** | 1 | 5V DC | Herbal Decoction Stirring Agitator Arm |
-| **Micro Servo 2 (SG90 / MG90S / MG995)** | 1 | 5V DC | Herbal Pod Dispenser / Hopper Flap (0° - 90°) |
-| **DHT11 Temp & Humidity Sensor** *(or DS18B20)* | 1 | 3.3V or 5V DC | Real-time temperature (°C) & ambient humidity (% RH) monitor |
-| **4.7kΩ / 10kΩ Resistor** | 1 | - | Pull-up resistor for DHT11 data line (only needed for 4-pin raw sensor) |
-| **1-Channel or 2-Channel 5V Relay** | 1 | 5V VCC, 3.3V Signal | Heater / Induction plate / Hotplate controller |
-| **Active Piezo Buzzer (5V)** | 1 | 3.3V - 5V DC | Audible notification & alarm beeper |
-| **4x4 Matrix Keypad (Optional)** | 1 | 3.3V Logic | Recipe selection & manual controls |
-| **N-Channel MOSFET (e.g. IRF520 / IRLZ44N) OR Relay Ch 2** | 1 | 5V - 12V DC | For switching the Peristaltic Pump DC motor |
-| **Flyback Diode (1N4007)** | 1 | - | Protection diode across DC Pump terminals |
-| **External 5V/12V DC Power Supply** | 1 | 2A - 3A | Powering Servos & Pump (Common Ground) |
-| **Silicone Pipe (6mm ID, 8-9mm OD)** | 1 | - | Food-grade fluid transfer tubing |
+This guide provides the complete circuit pinout, schematic diagram, and wiring instructions for interfacing the **ESP32 DevKit** with the **iKwath Smart Automated Ayurvedic Decoction Machine**.
 
 ---
 
-## 2. Complete ESP32 Pinout Mapping
+## 1. Automated Workflow Sequence
 
-```
-                         ESP32 DEVKIT V1 (30-PIN)
-                              +-----------+
-                        EN ---|           |--- GPIO 23 (Keypad Row 3)
-     (Keypad Row 1) GPIO 36---|           |--- GPIO 22 (Keypad Row 4)
-     (Keypad Row 2) GPIO 39---|           |--- TX0 (Serial Debug)
-                    GPIO 34---|           |--- RX0 (Serial Debug)
-                    GPIO 35---|           |--- GPIO 21 (Keypad Col 1)
-(Keypad Row 1) [*]  GPIO 32---|           |--- GPIO 15 (DHT11 / DS18B20 Temp Sensor Data)
-(Keypad Row 2) [*]  GPIO 33---|           |--- GPIO 18 (Flow Sensor Pulse Interrupt)
-(Buzzer Positive)   GPIO 25---|           |--- GPIO 5  (Keypad Col 4)
-(Pump MOSFET/Relay) GPIO 26---|           |--- GPIO 17 (Optional / Spare)
-(Heater Relay)      GPIO 27---|           |--- GPIO 16 (Optional / Spare)
-(Stirrer Servo 1)   GPIO 13---|           |--- GPIO 4  (Push Button to GND)
-(Pod Drop Servo 2)  GPIO 14---|           |--- GPIO 0  (Boot - Keep Free)
-(Keypad Col 2)      GPIO 12---|           |--- GPIO 2  (Keypad Col 3)
-(Keypad Col 2) [*]  GPIO 15---|           |--- GPIO 19 (Alternative Temp Data / Spare)
-                        GND---|           |--- GND (Common Ground)
-                        VIN---|           |--- 3V3 (3.3V Rail)
-                              +-----------+
-```
-*Note: Keypad pin assignments can be configured in firmware or disabled if running with Web UI + Push Button.*
-
----
-
-## 3. Step-by-Step Wiring & Circuit Schematic
-
-### A. Push Button (Start / Pause Trigger)
-- **Pin 1 of Button**: Connect to **ESP32 GPIO 4**
-- **Pin 2 of Button**: Connect to **ESP32 GND**
-*(The firmware uses the internal pull-up resistor `INPUT_PULLUP`, so NO external resistor is needed for the button! Pressing it grounds GPIO 4).*
-
----
-
-### B. DHT11 Temperature & Humidity Sensor Wiring
-
-The DHT11 measures ambient temperature (0°C–50°C) and relative humidity (20%–90% RH).
-
-#### Option 1: 3-Pin DHT11 Module (PCB Breakout Board - Most Popular)
-*(This module already has a pull-up resistor soldered on the PCB!)*
-- **Pin `+` / `VCC`**: Connect to **ESP32 3.3V** (or 5V)
-- **Pin `-` / `GND`**: Connect to **ESP32 GND**
-- **Pin `S` / `DATA` / `OUT`**: Connect to **ESP32 GPIO 15** *(Adjacent to GND & 3V3)*
-
-```
-  3-Pin DHT11 Module            ESP32 DevKit V1
-  +------------------+         +----------------+
-  |  [ + / VCC ] ----|-------->| 3.3V           |
-  |  [ - / GND ] ----|-------->| GND            |
-  |  [ S / DATA ] ---|-------->| GPIO 15        |
-  +------------------+         +----------------+
-  *(No external resistor needed!)*
+```mermaid
+graph TD
+    A[Push Button Pressed on GPIO 4] -->|Awaken / Emits start_pressed| B[Website Displays Kadha Formulation Catalog]
+    B -->|User Selects Kadha Formulation| C[Website Triggers Decoction Cycle]
+    C -->|Step 1: Pod Insertion| D[Servo on GPIO 14 Opens Flap to 90° for 5s, then Closes to 0°]
+    D -->|Step 2: Water Fill| E[Relay 2 on GPIO 26 Turns Pump ON -> 400 mL via Flow Sensor GPIO 18]
+    E -->|Step 3: Soaking| F[5-Second Timed Soaking Transition]
+    F -->|Step 4: Heating| G[Relay 1 on GPIO 27 Turns Heater ON -> DHT11 GPIO 15 Waits for 35°C]
+    G -->|Step 5: Stirring| H[ULN2003A + 28BYJ-48 Stepper GPIO 13,12,19,23 Agitates for 10s]
+    H -->|Step 6: Reduction & Filtration| I[Reduction 5s -> SS316 Filtration 5s -> Dispensing 5s]
+    I -->|Step 7: Ready| J[3 Victory Beeps on Buzzer GPIO 25 -> Brew Passport Displayed]
 ```
 
-#### Option 2: 4-Pin Raw DHT11 Sensor (Blue Grille with 4 legs)
-Looking at the sensor from the front (blue grille facing you, pins pointing down):
-- **Pin 1 (VCC - Leftmost)**: Connect to **ESP32 3.3V**
-- **Pin 2 (DATA)**: Connect to **ESP32 GPIO 15**
-- **Pin 3 (NC)**: Leave disconnected / floating
-- **Pin 4 (GND - Rightmost)**: Connect to **ESP32 GND**
-- **Pull-up Resistor**: Place a **10kΩ** (or 4.7kΩ) resistor between **Pin 1 (3.3V)** and **Pin 2 (DATA / GPIO 15)**.
+---
 
+## 2. Master ESP32 Pinout Mapping Table
+
+| Component | Pin / Signal | ESP32 GPIO | Operating Voltage | Notes / Logic Type |
+| :--- | :--- | :---: | :---: | :--- |
+| **Push Button** | Terminal 1<br>Terminal 2 | **GPIO 4**<br>**GND** | 3.3V Logic | `INPUT_PULLUP` (Active LOW). Pressing grounds GPIO 4. |
+| **Servo Motor** *(Pod Flap)* | PWM Signal (Orange/Yellow)<br>VCC (Red)<br>GND (Brown/Black) | **GPIO 14**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC | 0° = Closed Flap<br>90° = Open (5 seconds for pod drop) |
+| **Hall Flow Sensor** *(Water)* | Pulse Signal (Yellow)<br>VCC (Red)<br>GND (Black) | **GPIO 18**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC | Hardware Interrupt (`FALLING`). 400 mL cutoff. |
+| **DHT11 Sensor** *(Temp & Humidity)* | DATA (Pin 2 / S)<br>VCC (Pin 1 / +)<br>GND (Pin 4 / -) | **GPIO 15**<br>**3.3V (or 5V)**<br>**GND** | 3.3V – 5V DC | Monitors decoction temperature until **35°C**. |
+| **28BYJ-48 Stepper** *(ULN2003A Driver)* | `IN1`<br>`IN2`<br>`IN3`<br>`IN4`<br>`+` (VCC)<br>`-` (GND) | **GPIO 13**<br>**GPIO 12**<br>**GPIO 19**<br>**GPIO 23**<br>**5V (Ext 5V)**<br>**GND** | 5V DC | 4-phase 8-step half-stepping unipolar motor for non-blocking 10-second liquid agitation. |
+| **2-Channel Relay Module** *(2PH63091A)* | `IN1` (Heater)<br>`IN2` (Water Pump)<br>`VCC`<br>`GND` | **GPIO 27**<br>**GPIO 26**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC Signal | **Active LOW** optocoupler triggers:<br>• `IN1` = Heating element / hotplate<br>• `IN2` = Peristaltic / DC water pump |
+| **Active Buzzer** | Positive (+) Long Leg<br>Negative (-) Short Leg | **GPIO 25**<br>**GND** | 3.3V – 5V DC | Audible chirps and 3 victory beeps on completion. |
+| **Built-in Status LED** | Anode | **GPIO 2** | 3.3V | Solid ON when system is active and ready. |
+
+---
+
+## 3. Detailed Component Wiring Diagrams
+
+### A. Physical Push Button (Wakeup / Start / Pause)
+Connect a 2-pin tactile push button between **GPIO 4** and **GND**:
 ```
-       4-Pin DHT11                     ESP32 DevKit V1
-      +-----------+                   +----------------+
-      | 1 2  3  4 |                   |                |
-      +-----------+                   |                |
-        | |  |  |                     |                |
-(VCC) --+ |  |  +-------------------->| GND            |
-        | |  +--- [NC - Do not connect]|               |
-        | +-------------------------->| GPIO 15        |
-        |    ^                        |                |
-        |    | 10k Resistor           |                |
-        +--[ 10k ]--+                 |                |
-        |                             |                |
-        +---------------------------->| 3.3V           |
-                                      +----------------+
+  Push Button                  ESP32 DevKit V1
+ +------------+               +----------------+
+ |   [Pin 1]  |-------------->| GPIO 4         |
+ |   [Pin 2]  |-------------->| GND            |
+ +------------+               +----------------+
+ (Uses ESP32 internal pull-up: pinMode(4, INPUT_PULLUP))
 ```
-
-> [!TIP]
-> **Temperature Simulation Mode:**
-> The system has a built-in **Temperature Simulation Mode**. When active, the firmware dynamically simulates the decoction heating curve (from 25°C to 90°C) when the relay is active. You can switch between physical sensor and simulated mode with one click in the Web UI or a double-press of the physical push button!
-
----
-
-### C. Flow Sensor (6mm ID Pipe Inline)
-- **RED Wire (VCC)**: Connect to **5V (Vin / External 5V)**
-- **BLACK Wire (GND)**: Connect to **ESP32 GND**
-- **YELLOW Wire (Signal / Pulse)**: Connect to **ESP32 GPIO 18**
+- **From Home Screen**: Pressing the button awakens the machine and navigates the website to the **Kadha Catalog** (`formulations`).
+- **From Formulation/Confirm Screen**: Pressing the button starts the automated decoction cycle.
+- **During Active Brewing**: Pressing toggles Pause / Resume.
 
 ---
 
-### D. Servo Motors (Stirrer & Pod Dispenser)
-> [!WARNING]
-> **Do not power servos directly from ESP32 3.3V pin.** Servos draw peak currents up to 800mA–1A which will cause the ESP32 to brownout/reset. Use the 5V power supply or Vin with USB 2A+.
-- **Servo 1 (Stirrer - Stirring Arm in Vessel)**:
-  - **Brown / Black (GND)** $\rightarrow$ **External 5V Power Supply GND & ESP32 GND**
-  - **Red (VCC)** $\rightarrow$ **External 5V Power Supply (+5V)**
-  - **Orange / Yellow (PWM Signal)** $\rightarrow$ **ESP32 GPIO 13**
-- **Servo 2 (Pod Dispenser - Herb Hopper Flap)**:
-  - **Brown / Black (GND)** $\rightarrow$ **External 5V Power Supply GND & ESP32 GND**
-  - **Red (VCC)** $\rightarrow$ **External 5V Power Supply (+5V)**
-  - **Orange / Yellow (PWM Signal)** $\rightarrow$ **ESP32 GPIO 14**
+### B. Pod Insertion Servo Motor (GPIO 14)
+```
+  Servo Motor (SG90 / MG90S)   ESP32 & Power
+ +--------------------------+ +----------------+
+ | Signal (Orange/Yellow)   |-> GPIO 14        |
+ | VCC (Red)                |-> External +5V   |
+ | GND (Brown/Black)        |-> Common GND     |
+ +--------------------------+ +----------------+
+```
+- Holds flap open at **90° for exactly 5 seconds** when brewing begins so the herbal pod can be placed into the chamber.
+- Closes flap to **0°** before water fill starts.
 
 ---
 
-### E. Peristaltic / Sado Pump (12V / 5V DC)
-You can drive the DC pump using an **N-Channel MOSFET module** (e.g. IRF520 / D4184) or **Relay Channel 2**:
-
-**Using MOSFET Module**:
-- **SIG / IN**: Connect to **ESP32 GPIO 26**
-- **VCC (Module Logic)**: Connect to **ESP32 3.3V / 5V**
-- **GND**: Connect to **ESP32 GND**
-- **VIN+ / VIN- (Power Input)**: Connect to your **12V / 5V DC Power Supply**
-- **VOUT+ / VOUT- (Load Output)**: Connect to the **Pump (+) and (-)** terminals.
-- **Flyback Diode (1N4007)**: Place across pump terminals (Cathode/Stripe to (+), Anode to (-)) to prevent inductive kickback.
-
----
-
-### E. 2-Channel Relay Module (Model: 2PH63091A)
-The **2PH63091A** is a 2-channel 5V optocoupler-isolated relay module (Songle 10A 250VAC/30VDC). In the iKwath system:
-- **Channel 1 (IN1)** controls the **Heater / Hotplate / Heating Element**.
-- **Channel 2 (IN2)** controls the **Water Pump / Peristaltic Pump / Water Solenoid Valve**.
-
-#### 1. Logic Input Header Pins (4-Pin Male Header)
-| 2PH63091A Pin | Connects To | Description |
-| :--- | :--- | :--- |
-| **`VCC`** | **ESP32 5V (VIN)** or External 5V | Powers the optocoupler and module logic |
-| **`GND`** | **ESP32 GND** | Common Ground |
-| **`IN1`** | **ESP32 GPIO 27** | Relay 1 Trigger (Heater) — **Active LOW** |
-| **`IN2`** | **ESP32 GPIO 26** | Relay 2 Trigger (Pump / Valve) — **Active LOW** |
-
-#### 2. JD-VCC Isolation Jumper (3-Pin Header with Yellow Cap)
-- **Standard Setup (Single 5V Rail)**: Keep the **yellow jumper cap placed between `JD-VCC` and `VCC`**.
-- **Opto-Isolated Setup (Recommended for high-power induction loads)**: Remove the jumper cap. Connect **External 5V Power Supply (+5V)** to `JD-VCC`, and connect external GND to relay GND. This completely isolates the relay coil current surges from the ESP32.
-
-#### 3. Output Screw Terminals (Load Side Switching)
-Each channel has 3 screw terminals: **`NO` (Normally Open)**, **`COM` (Common)**, **`NC` (Normally Closed)**.
+### C. 2-Channel Relay Module (2PH63091A)
+The 2-channel relay controls the high-power loads (**Heater** and **Water Pump**):
 
 ```
        [ 2PH63091A 2-CHANNEL RELAY MODULE ]
@@ -174,123 +78,174 @@ Each channel has 3 screw terminals: **`NO` (Normally Open)**, **`COM` (Common)**
      |      RELAY 1               RELAY 2     |
      |     (HEATER)               (PUMP)      |
      |                                        |
-     |      [LED1]                [LED2]      |
-     |                                        |
-     |               [JD-VCC|VCC|GND] (Jumper)|
      |  [GND] [IN1] [IN2] [VCC]               |
      +---|------|-----|-----|-----------------+
          |      |     |     |
-         |      |     |     +---> ESP32 5V (VIN)
-         |      |     +---------> ESP32 GPIO 26 (Pump Trigger)
-         |      +---------------> ESP32 GPIO 27 (Heater Trigger)
-         +----------------------> ESP32 GND (Common Ground)
+         |      |     |     +---> ESP32 5V (VIN) / Ext 5V
+         |      |     +---------> ESP32 GPIO 26 (Pump Trigger - Active LOW)
+         |      +---------------> ESP32 GPIO 27 (Heater Trigger - Active LOW)
+         +----------------------> Common GND
 ```
 
-- **Relay 1 (Heater / Hotplate / Coil AC or DC)**:
-  - **`COM1`**: Connect to AC Live / DC (+) Power source line.
-  - **`NO1`**: Connect to Heater (+) or Live terminal.
-  - *(NC1 is left unconnected)*.
-- **Relay 2 (12V / 5V Peristaltic Pump / Water Valve)**:
-  - **`COM2`**: Connect to Pump Power Supply (+) line (+12V or +5V).
-  - **`NO2`**: Connect to Pump (+) motor wire.
-  - **Pump (-) wire**: Connect directly to Pump Power Supply GND / (-).
-  - *(NC2 is left unconnected)*.
-
-> [!NOTE]
-> **Active-LOW Triggering Logic:**
-> The `2PH63091A` module turns **ON** when the input signal is **LOW (0V)** and turns **OFF** when the signal is **HIGH (3.3V/5V)**. The iKwath ESP32 firmware is pre-configured with `relayActiveLow = true` to handle this logic seamlessly.
+#### Load Side Connections:
+1. **Relay 1 (Heater / Hotplate / Heating Element)**:
+   - **`COM1`**: Connect to AC Live / DC (+) Power Source.
+   - **`NO1`**: Connect to Heater (+) or Live terminal.
+   - *(Turns ON during `PHASE_HEATING` until DHT11 reads >= 35°C).*
+2. **Relay 2 (Water Pump / Solenoid Valve)**:
+   - **`COM2`**: Connect to Pump DC Power Supply (+) line (+12V or +5V).
+   - **`NO2`**: Connect to Pump (+) motor wire.
+   - **Pump (-) wire**: Connect directly to Pump Power Supply GND / (-).
+   - *(Turns ON during `PHASE_WATER_FILL` until flow sensor measures 400 mL).*
 
 ---
 
-### G. Active Buzzer
-- **Positive (+) Long Pin**: Connect to **ESP32 GPIO 25**
-- **Negative (-) Short Pin**: Connect to **ESP32 GND**
+### D. 28BYJ-48 Stepper Motor + ULN2003A Driver (Stirrer)
+```
+   ULN2003A Driver Board       ESP32 DevKit V1
+ +-----------------------+    +----------------+
+ | IN1                   |--->| GPIO 13        |
+ | IN2                   |--->| GPIO 12        |
+ | IN3                   |--->| GPIO 19        |
+ | IN4                   |--->| GPIO 23        |
+ | + (VCC)               |--->| External +5V   |
+ | - (GND)               |--->| Common GND     |
+ +-----------------------+    +----------------+
+             |
+   [5-Pin JST Connector]
+             v
+     28BYJ-48 Stepper
+```
+- Performs half-stepping bidirectional agitation for **10 seconds** during `PHASE_STIRRING`.
+- Automatically de-energizes all 4 coils (`LOW`) when stirring ends to keep the motor cool.
 
 ---
 
-### H. 4x4 Keypad (Optional)
-If using the 8-pin 4x4 matrix keypad:
-- **Row 1 to Row 4**: Connect to **GPIO 32, 33, 23, 22**
-- **Col 1 to Col 4**: Connect to **GPIO 21, 15, 2, 5**
+### E. DHT11 Temperature & Humidity Sensor (GPIO 15)
+```
+  3-Pin DHT11 Module           ESP32 DevKit V1
+ +--------------------+       +----------------+
+ | S / DATA / OUT     |------>| GPIO 15        |
+ | + / VCC            |------>| 3.3V (or 5V)   |
+ | - / GND            |------>| Common GND     |
+ +--------------------+       +----------------+
+```
+- Measures live decoction temperature with 0.1°C precision.
+- Signals completion when temperature reaches the user's **35°C target**.
 
 ---
 
-## 4. Master Breadboard / Wiring Schematic Diagram
+### F. Hall Effect Water Flow Sensor (GPIO 18)
+```
+  Flow Sensor (6mm ID)         ESP32 DevKit V1
+ +--------------------+       +----------------+
+ | Signal (Yellow)    |------>| GPIO 18        |
+ | VCC (Red)          |------>| 5V (Vin)       |
+ | GND (Black)        |------>| Common GND     |
+ +--------------------+       +----------------+
+```
+- Measures water flow in real-time via hardware interrupt.
+- Automatically cuts off Relay 2 when volume reaches **400 mL**.
+
+---
+
+### G. Active Piezo Buzzer (GPIO 25)
+```
+  Active Buzzer                ESP32 DevKit V1
+ +--------------------+       +----------------+
+ | Positive (+) Long  |------>| GPIO 25        |
+ | Negative (-) Short |------>| Common GND     |
+ +--------------------+       +----------------+
+```
+- Emits feedback chirps on button presses and 3 celebratory beeps when Kadha is ready.
+
+---
+
+## 4. Master Schematic Diagram
 
 ```
-+---------------------------------------------------------------------------------------------+
-|                                    iKwath ESP32 CIRCUIT DIAGRAM                             |
-+---------------------------------------------------------------------------------------------+
++----------------------------------------------------------------------------------------------------+
+|                                    iKwath ESP32 CIRCUIT DIAGRAM                                    |
++----------------------------------------------------------------------------------------------------+
 
-                      +5V External Power Supply --------+---------------+----------------+
-                                                        |               |                |
-                      GND External Power Supply ---+    |               |                |
-                                                   |    |               |                |
-                                                   |    |               |                |
-                     +-----------------------+     |    |               |                |
-                     |     ESP32 DevKit      |     |    |               |                |
-                     |                       |     |    |               |                |
-     Push Button <---| GPIO 4            5V  |<----+----+               |                |
-          |          |                   GND |<----+ (Common GND)       |                |
-         GND         |                   3V3 |--+                       |                |
-                     |                       |  |                       |                |
-    Flow Sensor <----| GPIO 18 (Interrupt)   |  |                       |                |
-      (Yellow)       |                       |  | (4.7k Pull-up)        |                |
-                     |                       |  |  +--[ 4.7k ]--+       |                |
-   DS18B20 Data <----| GPIO 19 (OneWire) ----+--|---------------+       |                |
-      (Yellow)       |                       |  |                       |                |
-                     |                       |  |                       |                |
-    Servo 1 PWM <----| GPIO 13 (Stirrer)     |  |                       |                |
-    Servo 2 PWM <----| GPIO 14 (Pod Flap)    |  |                       |                |
-                     |                       |  |                       |                |
-   Buzzer (+)   <----| GPIO 25               |  |                       |                |
-   Pump MOSFET  <----| GPIO 26               |  |                       |                |
-   Relay Signal <----| GPIO 27 (Heater)      |  |                       |                |
-                     +-----------------------+  |                       |                |
-                                                |                       |                |
-                                                |                       |                |
-     DS18B20 Temp Sensor:                       |                       |                |
-       - RED (VCC) -----------------------------+                       |                |
-       - BLACK (GND) ---------------------------+ (GND)                 |                |
-                                                                        |                |
-     Flow Sensor (6mm):                                                 |                |
-       - RED (VCC) -----------------------------------------------------+                |
-       - BLACK (GND) ---------------------------+ (GND)                 |                |
-                                                                        |                |
-     Servo 1 (Stirrer) & Servo 2 (Pod):                                 |                |
-       - RED (VCC) -----------------------------------------------------+                |
-       - BROWN/BLACK (GND) ---------------------+ (GND)                                  |
-                                                                                         |
-     Relay Module (5V):                                                                  |
-       - VCC ----------------------------------------------------------------------------+
-       - GND -----------------------------------+ (GND)
-
-     MOSFET / Pump Module:
-       - VCC / VIN+ --------------------------- +12V/+5V External Supply
-       - GND ---------------------------------- + (GND)
-       - Load Out ----------------------------- Peristaltic Pump (+/-)
-+---------------------------------------------------------------------------------------------+
+                          +5V External Power Supply -------------+---------------+-------------------+
+                                                                 |               |                   |
+                          GND External Power Supply --------+    |               |                   |
+                                                            |    |               |                   |
+                             +------------------------+     |    |               |                   |
+                             |      ESP32 DevKit      |     |    |               |                   |
+                             |                        |     |    |               |                   |
+             Push Button <---| GPIO 4             5V  |<----+----+               |                   |
+                  |          |                    GND |<----+ (Common GND)       |                   |
+                 GND         |                    3V3 |------+                   |                   |
+                             |                        |      |                   |                   |
+        DHT11 Sensor Data <--| GPIO 15                |      | (DHT11 3.3V)      |                   |
+                             |                        |      |                   |                   |
+      Flow Sensor (Yellow)<--| GPIO 18 (Interrupt)    |      |                   |                   |
+                             |                        |      |                   |                   |
+        ULN2003A IN1 (Stir)<--| GPIO 13                |      |                   |                   |
+        ULN2003A IN2 (Stir)<--| GPIO 12                |      |                   |                   |
+        ULN2003A IN3 (Stir)<--| GPIO 19                |      |                   |                   |
+        ULN2003A IN4 (Stir)<--| GPIO 23                |      |                   |                   |
+                             |                        |      |                   |                   |
+         Pod Servo (Flap)<---| GPIO 14 (PWM)          |      |                   |                   |
+                             |                        |      |                   |                   |
+          Buzzer Positive <--| GPIO 25                |      |                   |                   |
+        Relay 2 (Water Pump)<-| GPIO 26 (Active LOW)   |      |                   |                   |
+        Relay 1 (Heater) <---| GPIO 27 (Active LOW)   |      |                   |                   |
+                             +------------------------+      |                   |                   |
+                                                             |                   |                   |
+      DHT11 Temp Sensor:                                     |                   |                   |
+        - DATA ------------------ GPIO 15                    |                   |                   |
+        - VCC -----------------------------------------------+                   |                   |
+        - GND ------------------- (Common GND)                                   |                   |
+                                                                                 |                   |
+      Flow Sensor (6mm):                                                         |                   |
+        - SIGNAL ---------------- GPIO 18                                        |                   |
+        - VCC -------------------------------------------------------------------+                   |
+        - GND ------------------- (Common GND)                                                       |
+                                                                                                     |
+      Servo Motor (Pod Flap):                                                                        |
+        - SIGNAL ---------------- GPIO 14                                                            |
+        - VCC ---------------------------------------------------------------------------------------+
+        - GND ------------------- (Common GND)                                                       |
+                                                                                                     |
+      ULN2003A Stepper Driver (Stirrer):                                                             |
+        - IN1, IN2, IN3, IN4 ---- GPIO 13, 12, 19, 23                                                |
+        - VCC (+) -----------------------------------------------------------------------------------+
+        - GND (-) --------------- (Common GND)                                                       |
+                                                                                                     |
+      2PH63091A 2-Channel Relay:                                                                     |
+        - IN1 (Heater) ---------- GPIO 27 (Active LOW)                                               |
+        - IN2 (Pump) ------------ GPIO 26 (Active LOW)                                               |
+        - VCC ---------------------------------------------------------------------------------------+
+        - GND ------------------- (Common GND)
++----------------------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 5. Pipe & Fluid Routing (6mm Inner Diameter)
+## 5. Web Application Integration & Flashing
 
-1. **Water Reservoir** $\rightarrow$ [6mm Pipe] $\rightarrow$ **Peristaltic Pump Inlet**
-2. **Peristaltic Pump Outlet** $\rightarrow$ [6mm Pipe] $\rightarrow$ **Flow Sensor Inlet** (Observe flow arrow direction on sensor casing)
-3. **Flow Sensor Outlet** $\rightarrow$ [6mm Pipe] $\rightarrow$ **Brewing / Boiling Chamber**
-4. **Boiling Chamber Bottom Outlet** $\rightarrow$ **SS316 Filter Basket** $\rightarrow$ **Dispense Nozzle / Cup**
+1. **Flash Firmware**:
+   - Open Arduino IDE or Arduino CLI.
+   - Select Board: **ESP32 Dev Module** (or `esp32:esp32:esp32`).
+   - Select Port: **COM6** (or detected port).
+   - Click **Upload**.
 
----
+2. **Connect with Web Application**:
+   - Open the web application at `http://localhost:3000/`.
+   - Click **"Connect ESP32 (USB Serial)"** in the top navigation bar.
+   - Select your ESP32 COM port and click **Connect**.
+   - The browser automatically auto-reconnects on every refresh.
 
-## 6. How to Connect to the Web Software
-
-1. **Direct USB Web Serial (Recommended)**:
-   - Connect ESP32 to your PC using a MicroUSB data cable.
-   - In the iKwath Web App, click **"Connect ESP32 (USB Serial)"** in the top bar or Technician Screen.
-   - Select the ESP32 COM port and click **Connect**.
-   - The Web App immediately receives live temperature, flow volume, button presses, and sends automated brew controls!
-
-2. **WiFi Mode**:
-   - In `ikwath_esp32_firmware.ino`, enter your WiFi SSID & Password (or leave AP mode enabled).
-   - ESP32 connects to WiFi and opens a WebSocket server on port `81` / HTTP REST server on port `80`.
+3. **Run the Full Cycle**:
+   1. Press the **Push Button** on GPIO 4 $\rightarrow$ The website opens the **Kadha Catalog** screen.
+   2. Select any Kadha on the website (e.g. *Ayush Kwatha*, *Ashwagandha*, *Triphala*, *Guduchi*, *Dashamoola*, *Maharasnadi*, *Punarnavadi*).
+   3. The **Servo Motor** opens the pod flap (90°) for **5 seconds** and closes (0°).
+   4. **Relay 2** activates the pump until **400 mL** is recorded by the flow sensor.
+   5. **Soaking step** runs for **5 seconds**.
+   6. **Relay 1** activates the heater until the **DHT11** sensor reaches **35°C**.
+   7. The **28BYJ-48 Stepper Motor** agitates the decoction for **10 seconds**.
+   8. **Reduction, Filtration, and Dispensing** complete with **5-second pauses**.
+   9. **3 Victory Beeps** sound on the buzzer and the **Brew Passport** is generated!
