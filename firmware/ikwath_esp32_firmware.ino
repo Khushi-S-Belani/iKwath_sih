@@ -27,7 +27,7 @@
   4. Water Fill: Relay 2 turns pump ON; flows 400 mL via flow sensor on GPIO 18.
   5. Soaking: 5-second timed soaking step.
   6. Heating: Relay 1 turns heater ON; DHT11 on GPIO 15 monitors until 35°C is reached.
-  7. Stirring: 28BYJ-48 stepper motor stirs (512 steps CW <-> 512 steps CCW) for 10 seconds.
+  7. Stirring: 28BYJ-48 stepper motor stirs continuously in one direction for 10 seconds.
   8. Reduction, Filtration & Dispense: 5s pause each, then ready & 3 victory beeps!
   =============================================================================
 */
