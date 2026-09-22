@@ -54,25 +54,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="home-title">iKwath</div>
           <div className="home-badges">
             <StatusChip label={cfg.label} variant={cfg.chipVariant} />
-            {hardwareConnected ? (
-              <span
-                className="home-esp-badge connected"
-                onClick={onOpenHardwareModal}
-                title="ESP32 Bidirectional Hardware Bridge Active — Click for Diagnostics"
-              >
-                <span className="home-esp-dot pulse" />
-                ESP32 SYNCED · 115200
-              </span>
-            ) : (
-              <span
-                className="home-esp-badge standalone"
-                onClick={onOpenHardwareModal}
-                title="Standalone Mode — Click to Connect Hardware"
-              >
-                <span className="home-esp-dot" />
-                STANDALONE SIMULATION
-              </span>
-            )}
           </div>
         </div>
       </div>
