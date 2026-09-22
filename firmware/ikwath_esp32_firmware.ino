@@ -406,24 +406,25 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_POD_DROP:
-      // 1. Servo opens to 90° for 5 seconds
+      // 1. Servo opens to 90° and WAITS for user to insert pod & press push button on GPIO 4
       setPodFlap(90);
       setStepperActive(false);
       setPump(false);
       setHeater(false);
       beep(80, 2);
-      Serial.println("[STEP 1] Pod Door OPEN (90°). User inserting pod... (5 seconds)");
+      Serial.println("[STEP 1] Kadha selected! Pod Door OPEN (90°). Waiting for pod insertion & Push Button (GPIO 4) press...");
       break;
 
     case PHASE_WATER_FILL:
-      // 2. Servo closes to 0°, Pump Relay starts, flows 400 mL via flow sensor
+      // 2. Servo closed (0°), Relay 2 ON -> Pump runs until flow sensor measures 400 mL in real time
       setPodFlap(0);
       flowPulseCount = 0;
+      currentWaterMl = 0.0f;
       setPump(true);
       setHeater(false);
       setStepperActive(false);
       beep(100);
-      Serial.println("[STEP 2] Pod Door CLOSED (0°). Relay 2 ON -> Pump running to 400 mL...");
+      Serial.println("[STEP 2] Pod Door CLOSED (0°). Relay 2 ON -> Pump filling water. Flow sensor measuring to 400 mL in real time...");
       break;
 
     case PHASE_SOAKING:
@@ -528,6 +529,7 @@ void startBrewProcess() {
   cycleStartTime = millis();
   isPaused = false;
   flowPulseCount = 0;
+  currentWaterMl = 0.0f;
   Serial.println("\n[CYCLE] >>> Starting iKwath Automated Ayurvedic Decoction Process <<<");
   setPhase(PHASE_POD_DROP);
 }
@@ -549,18 +551,15 @@ void runStateMachine() {
 
   switch (currentPhase) {
     case PHASE_POD_DROP:
-      // 1. Pod door stays open 90° for exactly 5 seconds, then closes & moves to water fill
-      if (elapsedInPhase >= 5) {
-        setPodFlap(0);
-        setPhase(PHASE_WATER_FILL);
-      }
+      // 1. Pod door stays open 90° waiting indefinitely until user inserts pod and presses GPIO 4 button or dashboard confirms
       break;
 
     case PHASE_WATER_FILL:
-      // 2. Pump fills water until flow sensor reaches target 400 mL (with safety watchdog)
-      if (currentWaterMl >= targetWaterVolumeMl || elapsedInPhase >= 60) {
+      // 2. Pump fills water until flow sensor reaches target 400 mL in real time (safety watchdog: 120s)
+      if (currentWaterMl >= targetWaterVolumeMl || elapsedInPhase >= 120) {
         setPump(false);
-        Serial.printf("[FLOW COMPLETE] Measured: %.1f mL (Pulses: %lu)\n", currentWaterMl, flowPulseCount);
+        beep(120);
+        Serial.printf("[FLOW COMPLETE] Flow sensor measured %.1f mL in real time (Pulses: %lu). Relay 2 OFF.\n", currentWaterMl, flowPulseCount);
         setPhase(PHASE_SOAKING);
       }
       break;
@@ -633,7 +632,14 @@ void handlePushButton() {
     Serial.println("BUTTON_EVENT:start_pressed");
     Serial.println("{\"type\":\"button_event\",\"event\":\"start_pressed\"}");
 
-    if (currentPhase == PHASE_IDLE || currentPhase == PHASE_COMPLETE) {
+    if (currentPhase == PHASE_POD_DROP) {
+      // User inserted the pod and pressed push button on GPIO 4!
+      Serial.println("[POD INSERTED] Button pressed on GPIO 4 -> Locking pod door (0°) & starting Water Fill...");
+      setPodFlap(0);
+      beep(100);
+      setPhase(PHASE_WATER_FILL);
+      return;
+    } else if (currentPhase == PHASE_IDLE || currentPhase == PHASE_COMPLETE) {
       // Awaken and start
       startBrewProcess();
     } else {
@@ -696,12 +702,22 @@ void processSerialCommand(String cmd) {
     String action = getJsonString(cmd, "cmd");
     action.toLowerCase();
 
-    if (action == "start" || action == "start_brew") {
+    if (action == "start" || action == "start_brew" || action == "prepare_pod" || action == "select_recipe") {
       targetWaterVolumeMl = getJsonFloat(cmd, "set_water", 400.0f);
       targetExtractionTemp = getJsonFloat(cmd, "set_temp", 35.0f);
+      String rName = getJsonString(cmd, "recipe");
+      if (rName.length() > 0) currentRecipeName = rName;
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
       if (targetExtractionTemp <= 0) targetExtractionTemp = 35.0f;
-      startBrewProcess();
+      Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C\n",
+                    currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
+      startBrewProcess(); // Enters PHASE_POD_DROP, opens servo to 90° and waits for pod insertion & push button press
+      return;
+    } else if (action == "pod_inserted" || action == "confirm_pod" || action == "pod_close" || action == "start_fill") {
+      Serial.println("[POD INSERTED] Pod confirmed inserted! Closing pod door (0°) and starting Water Fill...");
+      setPodFlap(0);
+      beep(100);
+      setPhase(PHASE_WATER_FILL);
       return;
     } else if (action == "sync_recipe") {
       targetWaterVolumeMl = getJsonFloat(cmd, "set_water", 400.0f);
@@ -890,19 +906,6 @@ void setup() {
   // Initialize Stepper Motor Speed
   motor.setSpeed((long)stepperSpeedRpm);
   setStepperActive(false);
-
-  // Quick Relay Diagnostic Test (Audible click verification)
-  Serial.println("\n[DIAGNOSTICS] Testing Relay 1 (Heater - GPIO 27) click...");
-  digitalWrite(PIN_HEATER_RELAY, relayActiveLow ? LOW : HIGH);
-  delay(250);
-  digitalWrite(PIN_HEATER_RELAY, relayActiveLow ? HIGH : LOW);
-  delay(150);
-
-  Serial.println("[DIAGNOSTICS] Testing Relay 2 (Pump - GPIO 26) click...");
-  digitalWrite(PIN_PUMP_RELAY, pumpActiveLow ? LOW : HIGH);
-  delay(250);
-  digitalWrite(PIN_PUMP_RELAY, pumpActiveLow ? HIGH : LOW);
-  delay(150);
 
   // Quick Stepper Startup Self-Test using Stepper.h (Clockwise 512 steps, Counter-Clockwise -512 steps)
   Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 12 RPM...");

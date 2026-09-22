@@ -55,35 +55,38 @@ export default function App() {
     setCurrentSection('formulations');
   }, []);
 
-  // Step 2: Formulation selected → load profile + scan pod
+  // Step 2: Formulation selected → load profile + open servo flap (90°) for pod insertion
   const handleFormulationSelected = useCallback((f: FormulationProfile) => {
     setSelectedFormulation(f);
-    setPodState('SCANNING');
+    setPodState('DETECTED');
     setCurrentSection('pod');
     machine.scanPod(f.pod_id, f.id);
-    setTimeout(() => setPodState('DETECTED'), 1500);
+    if (esp32Serial.isConnected()) {
+      esp32Serial.preparePod(f.water_ml, f.extraction_temp_c, f.name);
+    }
   }, [machine]);
 
   const handlePodRetry = useCallback(() => {
-    setPodState('SCANNING');
-    setTimeout(() => setPodState('DETECTED'), 1500);
+    setPodState('DETECTED');
   }, []);
 
   const handlePodConfirm = useCallback(() => {
-    setPodState('IDLE');
-    setCurrentSection('brew-confirm');
+    handleStartBrew();
   }, []);
 
   const handleStartBrew = useCallback(() => {
     setMassHistory([]);
     setTempHistory([]);
+    if (esp32Serial.isConnected()) {
+      esp32Serial.confirmPodInserted();
+    }
     machine.startBrewSimulation(
       selectedFormulation.pod_id,
       selectedFormulation.id,
       selectedFormulation.water_ml,
       selectedFormulation.extraction_temp_c
     );
-    setCurrentSection('live-brew');
+    setCurrentSection('water-fill');
   }, [selectedFormulation, machine]);
 
   const handleCancelBrew = useCallback(() => {

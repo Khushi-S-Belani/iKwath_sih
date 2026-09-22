@@ -324,12 +324,29 @@ class ESP32SerialService {
   }
 
   // Actuator and Phase Commands with Recipe Sync
-  public async startBrew(waterMl = 400, tempC = 90): Promise<boolean> {
+  public async startBrew(waterMl = 400, tempC = 35): Promise<boolean> {
     return await this.sendCommand({
       cmd: 'start',
       set_water: waterMl,
       set_temp: tempC,
     });
+  }
+
+  public async preparePod(waterMl = 400, tempC = 35, recipeName?: string): Promise<boolean> {
+    return await this.sendCommand({
+      cmd: 'prepare_pod',
+      set_water: waterMl,
+      set_temp: tempC,
+      recipe: recipeName || 'custom',
+    });
+  }
+
+  public async confirmPodInserted(): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'pod_inserted' });
+  }
+
+  public async setServoAngle(angle: number): Promise<boolean> {
+    return await this.sendCommand({ cmd: angle >= 45 ? 'pod_open' : 'pod_close' });
   }
 
   public async syncRecipe(waterMl: number, tempC: number, recipeName?: string): Promise<boolean> {

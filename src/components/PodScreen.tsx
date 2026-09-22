@@ -75,11 +75,12 @@ export const PodScreen: React.FC<PodScreenProps> = ({ podState, formulation, onC
       {podState === 'DETECTED' && formulation && (
         <div className="pod-detected-block">
           <div className="pod-detected-header">
-            <StatusChip label="PROFILE LOADED" variant="active" />
-            <StatusChip label={`REV ${formulation.profile_revision}`} variant="info" />
+            <StatusChip label="SERVO FLAP: OPEN (90°)" variant="active" />
+            <StatusChip label="PROFILE LOADED" variant="info" />
+            <StatusChip label={`REV ${formulation.profile_revision}`} variant="neutral" />
           </div>
           <div className="pod-formulation-name">{formulation.name}</div>
-          <div className="pod-id-row">Pod ID: <span>{formulation.pod_id}</span></div>
+          <div className="pod-id-row">Target Water: <span>{formulation.water_ml} mL</span> · Extraction Temp: <span>{formulation.extraction_temp_c} °C</span></div>
 
           <div className="pod-params-grid">
             <div className="pod-param">
@@ -101,18 +102,23 @@ export const PodScreen: React.FC<PodScreenProps> = ({ podState, formulation, onC
           </div>
 
           <div className="pod-herbs">
-            <div className="pod-herbs-label">Herbs</div>
+            <div className="pod-herbs-label">Herbs Included</div>
             <div className="pod-herbs-list">{formulation.herbs.join(' · ')}</div>
           </div>
 
-          <div className="pod-profile-verified-note">
-            ✓ Profile verified — ready for pod insertion and water fill
+          <div className="pod-profile-verified-note" style={{ background: 'rgba(5, 150, 105, 0.08)', border: '1px solid rgba(5, 150, 105, 0.25)', padding: '12px 16px', borderRadius: '8px', marginTop: '12px' }}>
+            <div style={{ fontWeight: 600, color: 'var(--primary-dark)', marginBottom: 4 }}>
+              🚪 Servo Door Open (90°) — Ready for Pod
+            </div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Insert the herbal pod into the dispenser bay. Press the machine's <strong>Push Button (GPIO 4)</strong> or click below to lock door (0°) and begin real-time water fill.
+            </div>
           </div>
 
-          <div className="pod-cta-row">
-            <button id="btn-pod-back" className="btn-secondary" onClick={onBack}>Back</button>
-            <button id="btn-pod-confirm" className="btn-primary" onClick={onConfirm}>
-              INSERT POD & ADD WATER →
+          <div className="pod-cta-row" style={{ marginTop: '20px' }}>
+            <button id="btn-pod-back" className="btn-secondary" onClick={onBack}>← Back to Formulations</button>
+            <button id="btn-pod-confirm" className="btn-primary" onClick={onConfirm} style={{ minWidth: 260 }}>
+              POD INSERTED — LOCK & FILL (400 mL) →
             </button>
           </div>
         </div>
