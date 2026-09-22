@@ -42,12 +42,12 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
       {/* Key Metrics */}
       <div className="reduction-metrics">
         <div className="reduction-metric-card primary">
-          <div className="rm-label">Current mass</div>
-          <div className="rm-value">{sensor.mass_g > 0 ? sensor.mass_g.toFixed(1) : '—'}<span className="rm-unit">g</span></div>
+          <div className="rm-label">Current volume</div>
+          <div className="rm-value">{sensor.mass_g > 0 ? sensor.mass_g.toFixed(1) : '—'}<span className="rm-unit">mL</span></div>
         </div>
         <div className="reduction-metric-card">
           <div className="rm-label">Target endpoint</div>
-          <div className="rm-value">{formulation.reduction_endpoint_g}<span className="rm-unit">g</span></div>
+          <div className="rm-value">{formulation.reduction_endpoint_g}<span className="rm-unit">mL</span></div>
         </div>
         <div className="reduction-metric-card">
           <div className="rm-label">Reduction</div>
@@ -62,15 +62,15 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
       {/* Reduction Progress Bar */}
       <div className="reduction-bar-section">
         <div className="reduction-bar-label">
-          <span>Start ({formulation.water_ml} g)</span>
-          <span>Endpoint (~{formulation.reduction_endpoint_g} g)</span>
+          <span>Start ({formulation.water_ml} mL)</span>
+          <span>Endpoint (~{formulation.reduction_endpoint_g} mL)</span>
         </div>
         <div className="reduction-bar-track">
           <div className="reduction-bar-fill" style={{ width: `${reductionPct}%` }}>
             <div className="reduction-bar-glow" />
           </div>
           <div className="reduction-bar-thumb" style={{ left: `${reductionPct}%` }}>
-            <span>{sensor.mass_g > 0 ? sensor.mass_g.toFixed(0) : '—'}g</span>
+            <span>{sensor.mass_g > 0 ? sensor.mass_g.toFixed(0) : '—'} mL</span>
           </div>
         </div>
       </div>
@@ -78,19 +78,19 @@ export const ReductionScreen: React.FC<ReductionScreenProps> = ({
       {/* Charts */}
       <div className="reduction-charts">
         <div className="reduction-chart-card">
-          <div className="reduction-chart-title">Mass vs Time</div>
+          <div className="reduction-chart-title">Volume vs Time</div>
           <MiniChart
             series={[
               {
                 data: massData,
                 color: '#FF9F0A',
-                label: 'Mass (g)',
+                label: 'Volume (mL)',
               },
             ]}
             width={380}
             height={160}
             xLabel="Time (min)"
-            yLabel="Mass (g)"
+            yLabel="Volume (mL)"
           />
         </div>
         <div className="reduction-chart-card">

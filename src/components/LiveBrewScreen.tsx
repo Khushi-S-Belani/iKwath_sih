@@ -89,14 +89,14 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
           </div>
         </div>
 
-        {/* Mass — Large */}
+        {/* Volume — Large */}
         <div className="brew-mass-card">
-          <div className="brew-mass-label">Mass</div>
+          <div className="brew-mass-label">Volume</div>
           <div className="brew-mass-value">
             {sensor.mass_g > 0 ? sensor.mass_g.toFixed(0) : '–'}
-            <span className="brew-mass-unit">g</span>
+            <span className="brew-mass-unit">mL</span>
           </div>
-          <div className="brew-mass-target">Target endpoint: {sensor.target_mass_g} g</div>
+          <div className="brew-mass-target">Target endpoint: {sensor.target_mass_g} mL</div>
           {/* Reduction progress */}
           <div className="brew-reduction-wrap">
             <div className="brew-reduction-label">Reduction</div>
