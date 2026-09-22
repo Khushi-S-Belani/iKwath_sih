@@ -26,22 +26,6 @@ export const WaterFillScreen: React.FC<WaterFillScreenProps> = ({
         <StageStepper currentStage={stage} />
       </div>
 
-      {/* Header */}
-      <div className="wf-header">
-        <div className="wf-header-top">
-          <div className="wf-title">MEASURE WATER QUANTITY</div>
-          <div className="wf-kwatha-badge">
-            <span className="wf-kwatha-leaf">🌿</span>
-            <span className="wf-kwatha-tag-label">KWATHA FORMULATION:</span>
-            <span className="wf-kwatha-name">{formulation.name}</span>
-            <span className="wf-kwatha-id">[{formulation.pod_id}]</span>
-          </div>
-        </div>
-        <div className="wf-sub">
-          Load Cell + HX711 — measuring <strong style={{ color: 'var(--text-primary)' }}>{targetMass} mL</strong> water for <strong style={{ color: '#16A34A' }}>{formulation.name}</strong> via inlet or manual fill
-        </div>
-      </div>
-
       {/* Main layout */}
       <div className="wf-body">
         {/* Left — live reading */}

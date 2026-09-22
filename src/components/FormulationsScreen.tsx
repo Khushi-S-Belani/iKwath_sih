@@ -8,15 +8,10 @@ interface FormulationsScreenProps {
 }
 
 export const FormulationsScreen: React.FC<FormulationsScreenProps> = ({ onSelectFormulation }) => {
-  const [selected, setSelected] = useState<FormulationProfile | null>(null);
+  const [selected, setSelected] = useState<FormulationProfile | null>(FORMULATIONS[0]);
 
   return (
     <div className="screen-content formulations-screen">
-      <div className="formulations-header">
-        <div className="formulations-title">Formulation Library</div>
-        <div className="formulations-sub">Validated profiles · Read-only for normal users</div>
-      </div>
-
       <div className="formulations-layout">
         {/* List */}
         <div className="formulations-list">

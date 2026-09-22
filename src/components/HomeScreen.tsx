@@ -51,142 +51,93 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="home-brand-pulse" />
         </div>
         <div className="home-status-block">
-          <div className="home-title">iKWATH</div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <StatusChip
-              label={machineStatus}
-              variant={cfg.chipVariant}
-            />
-            {hardwareConnected && (
+          <div className="home-title">iKwath</div>
+          <div className="home-badges">
+            <StatusChip label={cfg.label} variant={cfg.chipVariant} />
+            {hardwareConnected ? (
               <span
+                className="home-esp-badge connected"
                 onClick={onOpenHardwareModal}
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: '#34d399',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid rgba(16, 185, 129, 0.4)',
-                  padding: '3px 10px',
-                  borderRadius: '999px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  cursor: 'pointer',
-                  boxShadow: '0 0 8px rgba(16, 185, 129, 0.2)',
-                }}
-                title="ESP32 Bidirectional Hardware Bridge Active"
+                title="ESP32 Bidirectional Hardware Bridge Active — Click for Diagnostics"
               >
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
-                ESP32 SYNCED
+                <span className="home-esp-dot pulse" />
+                ESP32 SYNCED · 115200
+              </span>
+            ) : (
+              <span
+                className="home-esp-badge standalone"
+                onClick={onOpenHardwareModal}
+                title="Standalone Mode — Click to Connect Hardware"
+              >
+                <span className="home-esp-dot" />
+                STANDALONE SIMULATION
               </span>
             )}
           </div>
         </div>
       </div>
 
-      <div className="home-sub-text">{cfg.label}</div>
+      <div className="home-sub-text">{cfg.description}</div>
 
-      {/* Live ESP32 Hardware Telemetry Bar */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '10px',
-          margin: '10px 0 14px 0',
-        }}
-      >
-        {/* DS18B20 Probe */}
-        <div
-          style={{
-            padding: '10px 12px',
-            background: 'rgba(251, 146, 60, 0.08)',
-            border: '1px solid rgba(251, 146, 60, 0.25)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Flame style={{ width: 16, height: 16, color: '#fb923c', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              DHT11 Temp
+      {/* Live ESP32 Precision Hardware Telemetry Bar */}
+      <div className="home-telemetry-grid">
+        {/* DHT11 Temp Sensor */}
+        <div className="home-tele-tile temp">
+          <div className="home-tele-icon-box temp">
+            <Flame style={{ width: 18, height: 18 }} />
+          </div>
+          <div className="home-tele-data">
+            <div className="home-tele-tag">EXTRACTION TEMP</div>
+            <div className="home-tele-val temp">
+              {liveTemp.toFixed(1)}<span className="home-tele-unit">°C</span>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: '#fb923c' }}>
-              {liveTemp.toFixed(1)} <span style={{ fontSize: '11px', fontWeight: 500 }}>°C</span>
-            </div>
+            <div className="home-tele-sub">DHT11 Sensor Live</div>
           </div>
         </div>
 
-        {/* Water / Mass Sensor */}
-        <div
-          style={{
-            padding: '10px 12px',
-            background: 'rgba(56, 189, 248, 0.08)',
-            border: '1px solid rgba(56, 189, 248, 0.25)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Droplets style={{ width: 16, height: 16, color: '#38bdf8', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              Chamber Fluid
+        {/* Chamber Fluid / Mass Sensor */}
+        <div className="home-tele-tile fluid">
+          <div className="home-tele-icon-box fluid">
+            <Droplets style={{ width: 18, height: 18 }} />
+          </div>
+          <div className="home-tele-data">
+            <div className="home-tele-tag">CHAMBER FLUID</div>
+            <div className="home-tele-val fluid">
+              {liveMass.toFixed(0)}<span className="home-tele-unit">mL</span>
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: '#38bdf8' }}>
-              {liveMass.toFixed(0)} <span style={{ fontSize: '11px', fontWeight: 500 }}>mL</span>
-            </div>
+            <div className="home-tele-sub">Flow Sensor / Load Cell</div>
           </div>
         </div>
 
-        {/* Actuator Status */}
-        <div
-          style={{
-            padding: '10px 12px',
-            background: 'rgba(192, 132, 252, 0.08)',
-            border: '1px solid rgba(192, 132, 252, 0.25)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <RotateCw style={{ width: 16, height: 16, color: '#c084fc', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              Actuators
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: sensor?.heater === 'ACTIVE' || sensor?.pump === 'ACTIVE' || sensor?.stirrer === 'ACTIVE' ? '#c084fc' : '#64748b' }}>
+        {/* Process Actuator Status */}
+        <div className="home-tele-tile actuators">
+          <div className={`home-tele-icon-box actuators ${sensor?.heater === 'ACTIVE' || sensor?.pump === 'ACTIVE' || sensor?.stirrer === 'ACTIVE' ? 'active' : ''}`}>
+            <RotateCw style={{ width: 18, height: 18 }} />
+          </div>
+          <div className="home-tele-data">
+            <div className="home-tele-tag">ACTUATOR STATUS</div>
+            <div className={`home-tele-val actuators ${sensor?.heater === 'ACTIVE' || sensor?.pump === 'ACTIVE' || sensor?.stirrer === 'ACTIVE' ? 'active' : ''}`}>
               {sensor?.heater === 'ACTIVE' ? 'HEATER ON' : sensor?.pump === 'ACTIVE' ? 'PUMP ON' : sensor?.stirrer === 'ACTIVE' ? 'STIRRER ON' : 'STANDBY'}
             </div>
+            <div className="home-tele-sub">Relays & Stepper</div>
           </div>
         </div>
 
-        {/* Controller Link */}
+        {/* Controller Connection Link */}
         <div
+          className={`home-tele-tile link ${hardwareConnected ? 'connected' : 'disconnected'}`}
           onClick={onOpenHardwareModal}
-          style={{
-            padding: '10px 12px',
-            background: hardwareConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(30, 41, 59, 0.4)',
-            border: hardwareConnected ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(71, 85, 105, 0.4)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            cursor: 'pointer',
-          }}
-          title="Click to open ESP32 hardware modal"
+          title="Click to open ESP32 Hardware Diagnostics Modal"
         >
-          <Cpu style={{ width: 16, height: 16, color: hardwareConnected ? '#34d399' : '#94a3b8', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              ESP32 Link
+          <div className={`home-tele-icon-box link ${hardwareConnected ? 'connected' : 'disconnected'}`}>
+            <Cpu style={{ width: 18, height: 18 }} />
+          </div>
+          <div className="home-tele-data">
+            <div className="home-tele-tag">ESP32 CONTROLLER</div>
+            <div className={`home-tele-val link ${hardwareConnected ? 'connected' : 'disconnected'}`}>
+              {hardwareConnected ? 'SYNCED' : 'OFFLINE'}
             </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: hardwareConnected ? '#34d399' : '#94a3b8' }}>
-              {hardwareConnected ? '115200 BAUD' : 'DISCONNECTED'}
-            </div>
+            <div className="home-tele-sub">{hardwareConnected ? '115200 Baud Bridge' : 'Click to Connect'}</div>
           </div>
         </div>
       </div>

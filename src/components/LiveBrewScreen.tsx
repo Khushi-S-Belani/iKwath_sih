@@ -54,16 +54,11 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
 
   return (
     <div className="screen-content live-brew-screen">
-      {/* Header Row */}
-      <div className="brew-header">
-        <div className="brew-header-left">
-          <div className="brew-title">{formulation.name.toUpperCase()}</div>
-          <div className="brew-subtitle">BREW #{brewNumber} · {paused ? '⏸ PAUSED' : microcopy}</div>
+      {fault && (
+        <div style={{ marginBottom: 10 }}>
+          <AlertBanner severity="STOP" message={fault} action="Cancel brew to return safely." />
         </div>
-        <div className="brew-header-right">
-          {fault && <AlertBanner severity="STOP" message={fault} action="Cancel brew to return safely." />}
-        </div>
-      </div>
+      )}
 
       {/* Stage Stepper */}
       <div className="brew-stepper-row">

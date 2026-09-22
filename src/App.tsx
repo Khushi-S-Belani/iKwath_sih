@@ -464,32 +464,11 @@ export default function App() {
                   {/* ESP32 Hardware Badge */}
                   <button
                     onClick={() => setIsHardwareModalOpen(true)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      backgroundColor: isHardwareConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(30, 41, 59, 0.6)',
-                      border: isHardwareConnected ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(71, 85, 105, 0.4)',
-                      color: isHardwareConnected ? '#34d399' : '#94a3b8',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
+                    className={`topbar-esp-btn ${isHardwareConnected ? 'connected' : 'disconnected'}`}
                     title="Open ESP32 Hardware Bridge & Diagnostics"
                   >
-                    <span
-                      style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        backgroundColor: isHardwareConnected ? '#10b981' : '#64748b',
-                        boxShadow: isHardwareConnected ? '0 0 6px #10b981' : 'none',
-                      }}
-                    />
-                    {isHardwareConnected ? 'ESP32 LIVE' : 'CONNECT ESP32'}
+                    <span className={`topbar-esp-dot ${isHardwareConnected ? 'pulse' : ''}`} />
+                    <span>{isHardwareConnected ? 'ESP32 LIVE' : 'CONNECT ESP32'}</span>
                   </button>
 
                   {/* Brew active indicator */}

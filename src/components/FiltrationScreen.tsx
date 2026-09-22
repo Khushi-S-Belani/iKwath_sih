@@ -28,28 +28,6 @@ export const FiltrationScreen: React.FC<FiltrationScreenProps> = ({ brewState, f
 
   return (
     <div className="screen-content filtration-screen">
-      <div className="filtration-header">
-        <div className="filtration-header-top">
-          <div className="filtration-title">
-            {isFiltering ? 'FILTER EXTRACT' : isDispensing ? 'DISPENSE KWATHA' : 'BREW COMPLETE'}
-          </div>
-          {formulation && (
-            <div className="wf-kwatha-badge">
-              <span className="wf-kwatha-leaf">🌿</span>
-              <span className="wf-kwatha-tag-label">KWATHA:</span>
-              <span className="wf-kwatha-name">{formulation.name}</span>
-            </div>
-          )}
-        </div>
-        <div className="filtration-sub">
-          {isFiltering
-            ? `Removable SS316 filter active — bottom outlet separating spent herbs for ${formulation?.name ?? 'Kwatha'}.`
-            : isDispensing
-            ? `Peristaltic pump + valve — controlled dispensing of fresh ${formulation?.name ?? 'Kwatha'}.`
-            : `Fresh ${formulation?.name ?? 'Kwatha'} decoction dispensed and ready.`}
-        </div>
-      </div>
-
       {/* Flow Diagram */}
       <div className="filtration-flow">
         {steps.map((step, idx) => (

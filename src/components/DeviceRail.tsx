@@ -119,7 +119,7 @@ export const DeviceRail: React.FC<DeviceRailProps> = ({
         </div>
       </div>
 
-      {/* Machine Status */}
+      {/* Machine Status Pill */}
       <div className="rail-status">
         <div className="rail-status-dot" style={{ background: STATUS_DOT[machineStatus] }} />
         <span className="rail-status-label">{machineStatus}</span>
@@ -140,34 +140,11 @@ export const DeviceRail: React.FC<DeviceRailProps> = ({
       {onOpenHardwareModal && (
         <button
           onClick={onOpenHardwareModal}
-          style={{
-            margin: '0 12px 10px 12px',
-            padding: '6px 10px',
-            borderRadius: '8px',
-            backgroundColor: isHardwareConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(30, 41, 59, 0.8)',
-            border: isHardwareConnected ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(71, 85, 105, 0.4)',
-            color: isHardwareConnected ? '#34d399' : '#94a3b8',
-            fontSize: '11px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
+          className={`rail-esp-btn ${isHardwareConnected ? 'connected' : 'disconnected'}`}
           title="Open ESP32 Hardware Bridge & Diagnostics"
         >
-          <span
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: isHardwareConnected ? '#10b981' : '#64748b',
-              boxShadow: isHardwareConnected ? '0 0 6px #10b981' : 'none',
-            }}
-          />
-          {isHardwareConnected ? 'ESP32 LIVE' : 'ESP32 BRIDGE'}
+          <span className={`rail-esp-dot ${isHardwareConnected ? 'pulse' : ''}`} />
+          <span>{isHardwareConnected ? 'ESP32 SYNCED' : 'CONNECT ESP32'}</span>
         </button>
       )}
 
