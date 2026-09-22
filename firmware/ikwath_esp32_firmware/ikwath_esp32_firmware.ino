@@ -446,33 +446,27 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_STIRRING:
-      // 5. 28BYJ-48 Stepper motor active stirring
+      // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 10 seconds
       setPump(false);
       setHeater(false);
       stepperActive = true;
       beep(100, 2);
-      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING for 10 seconds...");
+      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction for 10 seconds...");
       sendTelemetry();
 
-      // Active Stirring Execution for exactly 10 seconds (512 steps CW <-> 512 steps CCW)
+      // Active Stirring Execution for exactly 10 seconds in one single direction (Clockwise)
       {
         unsigned long stirringStart = millis();
         motor.setSpeed(12); // Smooth 12 RPM speed
         
         while (millis() - stirringStart < 10000) {
-          Serial.println("[STIRRER] Clockwise agitation (512 steps)...");
-          motor.step(512);
-          sendTelemetry();
-          if (millis() - stirringStart >= 10000) break;
-
-          Serial.println("[STIRRER] Counter-clockwise agitation (-512 steps)...");
-          motor.step(-512);
+          motor.step(256); // Rotate continuously in one direction (Clockwise)
           sendTelemetry();
         }
       }
 
       setStepperActive(false);
-      Serial.println("[STIRRING COMPLETE] 10s agitation finished.");
+      Serial.println("[STIRRING COMPLETE] 10s one-direction stirring finished.");
       setPhase(PHASE_REDUCTION);
       return;
 
@@ -761,12 +755,15 @@ void processSerialCommand(String cmd) {
       setHeater(false);
       return;
     } else if (action == "stirrer_on" || action == "stepper_on" || action == "test_stirrer" || action == "test_stepper") {
-      Serial.println("[TEST] Running Stepper Motor Agitation...");
+      Serial.println("[TEST] Running Stepper Motor in one direction for 10 seconds...");
       stepperActive = true;
       sendTelemetry();
       motor.setSpeed(12);
-      motor.step(512);
-      motor.step(-512);
+      unsigned long tStart = millis();
+      while (millis() - tStart < 10000) {
+        motor.step(256);
+        sendTelemetry();
+      }
       setStepperActive(false);
       sendTelemetry();
       return;
@@ -846,8 +843,11 @@ void processSerialCommand(String cmd) {
     stepperActive = true;
     sendTelemetry();
     motor.setSpeed(12);
-    motor.step(512);
-    motor.step(-512);
+    unsigned long tStart = millis();
+    while (millis() - tStart < 10000) {
+      motor.step(256);
+      sendTelemetry();
+    }
     setStepperActive(false);
     sendTelemetry();
   } else if (cmd.equalsIgnoreCase("STEPPER:OFF") || cmd.equalsIgnoreCase("STIRRER:OFF")) {
@@ -907,14 +907,11 @@ void setup() {
   motor.setSpeed((long)stepperSpeedRpm);
   setStepperActive(false);
 
-  // Quick Stepper Startup Self-Test using Stepper.h (Clockwise 512 steps, Counter-Clockwise -512 steps)
-  Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 12 RPM...");
+  // Quick Stepper Startup Self-Test using Stepper.h (Clockwise 512 steps)
+  Serial.println("[DIAGNOSTICS] Testing Stepper Motor via Stepper.h @ 12 RPM (One direction)...");
   motor.setSpeed(12);
   Serial.println("  -> Clockwise rotation (512 steps)...");
   motor.step(512);
-  delay(200);
-  Serial.println("  -> Counter-clockwise rotation (-512 steps)...");
-  motor.step(-512);
   setStepperActive(false);
   Serial.println("[DIAGNOSTICS] Stepper self-test complete.");
 
