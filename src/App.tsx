@@ -448,29 +448,6 @@ export default function App() {
                   <div className="screen-sub">{meta.sub}</div>
                 </div>
                 <div className="topbar-right">
-                  {/* Selected Kwatha Formulation Pill */}
-                  <div
-                    className="topbar-kwatha-pill"
-                    onClick={() => !brewInProgress && setCurrentSection('formulations')}
-                    title={`Selected Kwatha Formulation: ${selectedFormulation.name} (${selectedFormulation.pod_id})`}
-                    style={{ cursor: brewInProgress ? 'default' : 'pointer' }}
-                  >
-                    <span className="tkp-icon">🌿</span>
-                    <div className="tkp-content">
-                      <span className="tkp-label">KWATHA</span>
-                      <span className="tkp-name">{selectedFormulation.name}</span>
-                    </div>
-                  </div>
-                  {/* ESP32 Hardware Badge */}
-                  <button
-                    onClick={() => setIsHardwareModalOpen(true)}
-                    className={`topbar-esp-btn ${isHardwareConnected ? 'connected' : 'disconnected'}`}
-                    title="Open ESP32 Hardware Bridge & Diagnostics"
-                  >
-                    <span className={`topbar-esp-dot ${isHardwareConnected ? 'pulse' : ''}`} />
-                    <span>{isHardwareConnected ? 'ESP32 LIVE' : 'CONNECT ESP32'}</span>
-                  </button>
-
                   {/* Brew active indicator */}
                   {brewInProgress && (
                     <div className="brew-active-badge">
