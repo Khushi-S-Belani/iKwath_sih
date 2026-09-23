@@ -79,12 +79,12 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
             {sensor.temperature_c.toFixed(1)}
             <span className="brew-temp-unit">°C</span>
           </div>
-          <div className="brew-temp-target">Target: {formulation.extraction_temp_c} °C</div>
+          <div className="brew-temp-target">Target: {Math.min(35, formulation.extraction_temp_c || 35)} °C</div>
           {/* Temp bar */}
           <div className="brew-temp-bar-wrap">
             <div
               className="brew-temp-bar-fill"
-              style={{ width: `${Math.min(100, (sensor.temperature_c / 100) * 100)}%` }}
+              style={{ width: `${Math.min(100, (sensor.temperature_c / (Math.min(35, formulation.extraction_temp_c || 35))) * 100)}%` }}
             />
           </div>
         </div>

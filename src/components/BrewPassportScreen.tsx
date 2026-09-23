@@ -88,8 +88,13 @@ export const BrewPassportScreen: React.FC<BrewPassportScreenProps> = ({
         </button>
         <button
           id="btn-start-cleaning"
+          type="button"
           className={record.cleaning_completed ? 'btn-secondary' : 'btn-primary'}
-          onClick={onStartCleaning}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onStartCleaning();
+          }}
         >
           {record.cleaning_completed ? '✓ Cleaning Done' : '⟳ START CLEANING'}
         </button>

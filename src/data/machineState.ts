@@ -78,6 +78,7 @@ const TOTAL_DEMO_SEC = 48; // ~48 s total baseline
 // ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
 function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targetWaterMl: number = 400, targetTempC: number = 35): SensorData {
   const s = { ...prev };
+  const effectiveTargetTemp = Math.min(35, targetTempC || 35);
 
   switch (phase) {
     case 'WATER_FILL': {
@@ -111,9 +112,9 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.stirrer = 'OFF';
       s.pump = 'OFF';
       s.flow_rate_lpm = 0;
-      // Real-time temperature heating curve: ~1.4°C/s until targetTempC reached
+      // Real-time temperature heating curve: ~1.4°C/s until 35°C limitation reached
       const currentT = prev.temperature_c >= 25 ? prev.temperature_c : 25.0;
-      const newTemp = Math.min(targetTempC, currentT + 1.4 + (Math.random() - 0.5) * 0.2);
+      const newTemp = Math.min(effectiveTargetTemp, currentT + 1.4 + (Math.random() - 0.5) * 0.2);
       s.temperature_c = parseFloat(newTemp.toFixed(1));
       s.mass_g = Math.max(targetWaterMl * 0.95, targetWaterMl - elapsed * 0.8);
       break;
@@ -123,7 +124,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.heater = 'OFF';
       s.stirrer = 'ACTIVE';
       s.pump = 'OFF';
-      s.temperature_c = targetTempC + (Math.random() - 0.5) * 0.2;
+      s.temperature_c = effectiveTargetTemp + (Math.random() - 0.5) * 0.2;
       s.mass_g = Math.max(targetWaterMl * 0.85, targetWaterMl - elapsed * 2.0);
       break;
 
@@ -131,7 +132,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = targetTempC - (Math.random() * 0.5);
+      s.temperature_c = effectiveTargetTemp - (Math.random() * 0.5);
       s.mass_g = Math.max(s.target_mass_g || 102, (targetWaterMl * 0.8) - elapsed * 15);
       break;
 
@@ -250,12 +251,13 @@ export function useMachineState() {
     phaseIdxRef.current     = 0;
     phaseElapsedRef.current = 0;
     totalElapsedRef.current = 0;
+    const effectiveTemp = Math.min(35, tempC || 35);
     targetWaterRef.current  = waterMl;
-    targetTempRef.current   = tempC;
+    targetTempRef.current   = effectiveTemp;
 
     // Trigger physical hardware brew if ESP32 connected
     if (esp32Serial.isConnected()) {
-      esp32Serial.startBrew(waterMl, tempC);
+      esp32Serial.startBrew(waterMl, effectiveTemp);
     }
 
     setState((prev) => ({
@@ -302,8 +304,9 @@ export function useMachineState() {
             // SENSOR GATED: Only advance after measured water reaches target mL (400 mL)
             canAdvance = evolvedSensor.mass_g >= targetWaterRef.current;
           } else if (cur.phase === 'HEATING') {
-            // SENSOR GATED: Only advance after real-time temperature reaches target extraction temp (°C)
-            canAdvance = evolvedSensor.temperature_c >= targetTempRef.current;
+            // SENSOR GATED: When temperature touches 35°C limitation, heating ends and stirring starts!
+            const targetLimit = Math.min(35, targetTempRef.current || 35);
+            canAdvance = evolvedSensor.temperature_c >= targetLimit;
           } else {
             // TIMED GAP STEP: Advances normally after specified duration gap
             canAdvance = phaseElapsedRef.current >= cur.durationSec;
@@ -422,9 +425,9 @@ export function useMachineState() {
         else if (pUpper === 'REDUCTION') mappedPhase = 'REDUCTION';
         else if (pUpper === 'FILTRATION') mappedPhase = 'FILTRATION';
         else if (pUpper === 'DISPENSING') mappedPhase = 'DISPENSING';
-        else if (pUpper === 'READY' || pUpper === 'COMPLETE') mappedPhase = 'COMPLETE';
         else if (pUpper === 'CLEANING') mappedPhase = 'CLEANING';
-        else if (pUpper === 'IDLE' && prev.phase !== 'IDLE' && prev.phase !== 'READY' && prev.phase !== 'COMPLETE') {
+        else if ((pUpper === 'READY' || pUpper === 'COMPLETE') && prev.phase !== 'CLEANING') mappedPhase = 'COMPLETE';
+        else if (pUpper === 'IDLE' && prev.phase !== 'IDLE' && prev.phase !== 'READY' && prev.phase !== 'COMPLETE' && prev.phase !== 'CLEANING') {
           mappedPhase = 'IDLE';
         }
 

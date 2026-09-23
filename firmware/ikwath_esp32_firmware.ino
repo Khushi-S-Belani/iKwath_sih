@@ -702,8 +702,8 @@ void processSerialCommand(String cmd) {
       String rName = getJsonString(cmd, "recipe");
       if (rName.length() > 0) currentRecipeName = rName;
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0) targetExtractionTemp = 35.0f;
-      Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C\n",
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
+      Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C (35°C Limit)\n",
                     currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
       startBrewProcess(); // Enters PHASE_POD_DROP, opens servo to 90° and waits for pod insertion & push button press
       return;
@@ -719,8 +719,8 @@ void processSerialCommand(String cmd) {
       String rName = getJsonString(cmd, "recipe");
       if (rName.length() > 0) currentRecipeName = rName;
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0) targetExtractionTemp = 35.0f;
-      Serial.printf("[CONFIG] Synced recipe: %s | Water: %.0f mL | Target Temp: %.0f °C\n",
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
+      Serial.printf("[CONFIG] Synced recipe: %s | Water: %.0f mL | Target Temp: %.0f °C (35°C Limit)\n",
                     currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
       sendTelemetry();
       return;
@@ -823,7 +823,7 @@ void processSerialCommand(String cmd) {
         targetWaterVolumeMl = cmd.substring(secondColon + 1).toFloat();
       }
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0) targetExtractionTemp = 35.0f;
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
     }
     startBrewProcess();
   } else if (cmd.equalsIgnoreCase("STOP_BREW") || cmd.equalsIgnoreCase("STOP") || cmd.equalsIgnoreCase("RESET")) {

@@ -218,40 +218,48 @@ export default function App() {
       setCurrentSection('reduction');
     } else if (brewState.phase === 'FILTRATION' || brewState.phase === 'DISPENSING') {
       setCurrentSection('filtration');
+    } else if (brewState.phase === 'CLEANING') {
+      setCleaningPhase('RINSING');
+      setCurrentSection('cleaning');
     } else if (brewState.phase === 'COMPLETE') {
       // Build brew record and show passport
-      const record: BrewRecord = {
-        brew_id: `#${brewState.brew_number}`,
-        formulation: selectedFormulation.name,
-        pod_id: selectedFormulation.pod_id,
-        timestamp: new Date(),
-        water_input_ml: selectedFormulation.water_ml,
-        final_mass_g: parseFloat(brewState.sensor.mass_g.toFixed(1)) || selectedFormulation.reduction_endpoint_g,
-        cycle_time_min: Math.floor(brewState.elapsed_sec / 60),
-        cycle_time_sec: brewState.elapsed_sec % 60,
-        temp_profile: tempHistory.slice(-60),
-        mass_profile: massHistory.slice(-60),
-        stage_timestamps: {
-          POD_DETECTED: 0,
-          WATER_FILL: 0.2,
-          SOAKING: 0.5,
-          HEATING: selectedFormulation.soak_time_min,
-          STIRRING: selectedFormulation.soak_time_min + 2,
-          REDUCTION: selectedFormulation.soak_time_min + selectedFormulation.extraction_time_min,
-          FILTRATION: brewState.elapsed_sec / 60 - 3,
-          DISPENSING: brewState.elapsed_sec / 60 - 1,
-          CLEANING: brewState.elapsed_sec / 60,
-          READY: brewState.elapsed_sec / 60 + 3,
-        },
-        cleaning_completed: false,
-        result: 'PASS',
-        warnings: [],
-      };
-      setCurrentBrewRecord(record);
-      setBrewHistory((prev) => [record, ...prev]);
+      setCurrentBrewRecord((prev) => {
+        if (prev && prev.brew_id === `#${brewState.brew_number}`) {
+          return prev;
+        }
+        const record: BrewRecord = {
+          brew_id: `#${brewState.brew_number}`,
+          formulation: selectedFormulation.name,
+          pod_id: selectedFormulation.pod_id,
+          timestamp: new Date(),
+          water_input_ml: selectedFormulation.water_ml,
+          final_mass_g: parseFloat(brewState.sensor.mass_g.toFixed(1)) || selectedFormulation.reduction_endpoint_g,
+          cycle_time_min: Math.floor(brewState.elapsed_sec / 60),
+          cycle_time_sec: brewState.elapsed_sec % 60,
+          temp_profile: tempHistory.slice(-60),
+          mass_profile: massHistory.slice(-60),
+          stage_timestamps: {
+            POD_DETECTED: 0,
+            WATER_FILL: 0.2,
+            SOAKING: 0.5,
+            HEATING: selectedFormulation.soak_time_min,
+            STIRRING: selectedFormulation.soak_time_min + 2,
+            REDUCTION: selectedFormulation.soak_time_min + selectedFormulation.extraction_time_min,
+            FILTRATION: brewState.elapsed_sec / 60 - 3,
+            DISPENSING: brewState.elapsed_sec / 60 - 1,
+            CLEANING: brewState.elapsed_sec / 60,
+            READY: brewState.elapsed_sec / 60 + 3,
+          },
+          cleaning_completed: false,
+          result: 'PASS',
+          warnings: [],
+        };
+        setBrewHistory((h) => (h.some((r) => r.brew_id === record.brew_id) ? h : [record, ...h]));
+        return record;
+      });
       setCurrentSection('brew-passport');
     }
-  }, [brewState.phase]);
+  }, [brewState.phase, brewState.brew_number, selectedFormulation, brewState.sensor.mass_g, brewState.elapsed_sec, tempHistory, massHistory]);
 
   // Clock
   useEffect(() => {
