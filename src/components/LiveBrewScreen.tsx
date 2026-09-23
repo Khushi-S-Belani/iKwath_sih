@@ -14,6 +14,7 @@ interface LiveBrewScreenProps {
   onResume: () => void;
   onCancel: () => void;
   onViewDetails: () => void;
+  onSkipPhase?: () => void;
 }
 
 function formatTime(sec: number): string {
@@ -26,7 +27,7 @@ function formatTime(sec: number): string {
 const STAGE_MICROCOPY: Record<string, string> = {
   WATER_FILL: 'Measuring water quantity via Load Cell / Flow Sensor.',
   SOAKING: 'Maintaining soak time as per formulation profile.',
-  HEATING: 'Induction heating with DHT11 digital temperature feedback.',
+  HEATING: 'Induction heating with DS18B20 digital temperature feedback.',
   STIRRING: 'Stirrer Servo agitating decoction at profile-based speed.',
   REDUCTION: 'Monitoring mass & temperature to target reduction endpoint.',
   FILTRATION: 'SS316 filter — separating spent coarse powder via bottom outlet.',
@@ -42,6 +43,7 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
   onResume,
   onCancel,
   onViewDetails,
+  onSkipPhase,
 }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const { sensor, stage, phase, paused, elapsed_sec, estimated_remaining_sec, fault } = brewState;
@@ -72,19 +74,19 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
           <div className="brew-temp-label">
             Temperature
             {(brewState.phase === 'HEATING' || brewState.phase === 'STIRRING') && (
-              <span className="brew-sensor-tag"> · DHT11</span>
+              <span className="brew-sensor-tag"> · DS18B20</span>
             )}
           </div>
           <div className="brew-temp-value">
             {sensor.temperature_c.toFixed(1)}
             <span className="brew-temp-unit">°C</span>
           </div>
-          <div className="brew-temp-target">Target: {Math.min(35, formulation.extraction_temp_c || 35)} °C</div>
+          <div className="brew-temp-target">Target: {formulation.extraction_temp_c} °C</div>
           {/* Temp bar */}
           <div className="brew-temp-bar-wrap">
             <div
               className="brew-temp-bar-fill"
-              style={{ width: `${Math.min(100, (sensor.temperature_c / (Math.min(35, formulation.extraction_temp_c || 35))) * 100)}%` }}
+              style={{ width: `${Math.min(100, (sensor.temperature_c / (formulation.extraction_temp_c || 90)) * 100)}%` }}
             />
           </div>
         </div>
@@ -160,6 +162,11 @@ export const LiveBrewScreen: React.FC<LiveBrewScreenProps> = ({
 
       {/* Controls */}
       <div className="brew-controls">
+        {onSkipPhase && (
+          <button id="btn-next-stage" className="btn-primary btn-sm" onClick={onSkipPhase} style={{ background: '#059669', borderColor: '#10b981', color: '#fff', fontWeight: 600 }}>
+            ⏭ Forward to Next Step
+          </button>
+        )}
         <button id="btn-view-details" className="btn-secondary btn-sm" onClick={onViewDetails}>
           View Details
         </button>

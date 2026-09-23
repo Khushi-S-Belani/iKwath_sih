@@ -64,21 +64,21 @@ const INITIAL_STATE: LiveBrewState = {
 // SENSOR-GATED STEPS: Only proceed when real-time sensor data meets target
 // TIMED GAP STEPS: Proceed after specified duration gap for natural processing
 const DEMO_PHASES: { phase: BrewPhase; isSensorGated: boolean; durationSec: number }[] = [
-  { phase: 'WATER_FILL',  isSensorGated: true,  durationSec: 10 }, // Sensor-gated: Flow sensor / Load cell to 400 mL
-  { phase: 'SOAKING',    isSensorGated: false, durationSec:  5 }, // Timed gap: 5s botanical maceration
-  { phase: 'HEATING',    isSensorGated: true,  durationSec:  8 }, // Sensor-gated: DHT11 temperature to target °C
-  { phase: 'STIRRING',   isSensorGated: false, durationSec: 10 }, // Component agitation: 10s 28BYJ-48 stepper
-  { phase: 'REDUCTION',  durationSec:  5, isSensorGated: false }, // Timed gap: 5s decoction mass loss tracking
-  { phase: 'FILTRATION', durationSec:  5, isSensorGated: false }, // Timed gap: 5s SS316 filter separation
-  { phase: 'DISPENSING', durationSec:  5, isSensorGated: false }, // Component dispense: 5s peristaltic pump
+  { phase: 'WATER_FILL',  isSensorGated: true,  durationSec: 12 }, // Sensor-gated: Flow sensor / Load cell to 400 mL
+  { phase: 'SOAKING',    isSensorGated: false, durationSec: 10 }, // Timed gap: 10s botanical maceration
+  { phase: 'HEATING',    isSensorGated: true,  durationSec: 12 }, // Sensor-gated: Temperature to target °C
+  { phase: 'STIRRING',   isSensorGated: false, durationSec: 12 }, // Component agitation: 12s 28BYJ-48 stepper
+  { phase: 'REDUCTION',  durationSec: 15, isSensorGated: false }, // Timed gap: 15s decoction mass loss tracking (>= 10s)
+  { phase: 'FILTRATION', durationSec: 10, isSensorGated: false }, // Timed gap: 10s SS316 filter separation
+  { phase: 'DISPENSING', durationSec: 10, isSensorGated: false }, // Component dispense: 10s peristaltic pump
   { phase: 'COMPLETE',   durationSec:  0, isSensorGated: false },
 ];
-const TOTAL_DEMO_SEC = 48; // ~48 s total baseline
+const TOTAL_DEMO_SEC = 71; // ~71 s total baseline
 
 // ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
-function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targetWaterMl: number = 400, targetTempC: number = 35): SensorData {
+function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targetWaterMl: number = 400, targetTempC: number = 90): SensorData {
   const s = { ...prev };
-  const effectiveTargetTemp = Math.min(35, targetTempC || 35);
+  const effectiveTargetTemp = targetTempC || 90;
 
   switch (phase) {
     case 'WATER_FILL': {
@@ -112,9 +112,9 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.stirrer = 'OFF';
       s.pump = 'OFF';
       s.flow_rate_lpm = 0;
-      // Real-time temperature heating curve: ~1.4°C/s until 35°C limitation reached
+      // Real-time temperature heating curve to formulation target
       const currentT = prev.temperature_c >= 25 ? prev.temperature_c : 25.0;
-      const newTemp = Math.min(effectiveTargetTemp, currentT + 1.4 + (Math.random() - 0.5) * 0.2);
+      const newTemp = Math.min(effectiveTargetTemp, currentT + 3.5 + (Math.random() - 0.5) * 0.4);
       s.temperature_c = parseFloat(newTemp.toFixed(1));
       s.mass_g = Math.max(targetWaterMl * 0.95, targetWaterMl - elapsed * 0.8);
       break;
@@ -128,13 +128,18 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.mass_g = Math.max(targetWaterMl * 0.85, targetWaterMl - elapsed * 2.0);
       break;
 
-    case 'REDUCTION':
+    case 'REDUCTION': {
       s.heater = 'OFF';
       s.stirrer = 'OFF';
       s.pump = 'OFF';
-      s.temperature_c = effectiveTargetTemp - (Math.random() * 0.5);
-      s.mass_g = Math.max(s.target_mass_g || 102, (targetWaterMl * 0.8) - elapsed * 15);
+      s.temperature_c = parseFloat(Math.max(72, effectiveTargetTemp - elapsed * 0.6 + (Math.random() - 0.5) * 0.3).toFixed(1));
+      const targetEndpoint = s.target_mass_g || 102;
+      const startReductionMass = targetWaterMl * 0.95;
+      const progress = Math.min(1.0, Math.max(0, elapsed / 14));
+      const currentMass = startReductionMass - progress * (startReductionMass - targetEndpoint);
+      s.mass_g = parseFloat((currentMass + (Math.random() - 0.5) * 0.4).toFixed(1));
       break;
+    }
 
     case 'FILTRATION':
       s.heater = 'OFF';
@@ -245,13 +250,13 @@ export function useMachineState() {
     pod_id: string,
     formulation_id: string,
     waterMl: number = 400,
-    tempC: number = 35
+    tempC: number = 90
   ) => {
     stopTimer();
     phaseIdxRef.current     = 0;
     phaseElapsedRef.current = 0;
     totalElapsedRef.current = 0;
-    const effectiveTemp = Math.min(35, tempC || 35);
+    const effectiveTemp = tempC || 90;
     targetWaterRef.current  = waterMl;
     targetTempRef.current   = effectiveTemp;
 
@@ -304,9 +309,8 @@ export function useMachineState() {
             // SENSOR GATED: Only advance after measured water reaches target mL (400 mL)
             canAdvance = evolvedSensor.mass_g >= targetWaterRef.current;
           } else if (cur.phase === 'HEATING') {
-            // SENSOR GATED: When temperature touches 35°C limitation, heating ends and stirring starts!
-            const targetLimit = Math.min(35, targetTempRef.current || 35);
-            canAdvance = evolvedSensor.temperature_c >= targetLimit;
+            // SENSOR GATED: When temperature touches formulation target, heating ends and stirring starts!
+            canAdvance = evolvedSensor.temperature_c >= (targetTempRef.current || 90);
           } else {
             // TIMED GAP STEP: Advances normally after specified duration gap
             canAdvance = phaseElapsedRef.current >= cur.durationSec;
@@ -330,6 +334,9 @@ export function useMachineState() {
 
   // ─── Skip current phase instantly ─────────────────────────────────────────
   const skipPhase = useCallback(() => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.skipPhase();
+    }
     setState((prev) => {
       const patch = advancePhase(prev.sensor);
       return patch ? { ...prev, ...patch } : prev;

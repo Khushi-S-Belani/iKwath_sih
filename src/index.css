@@ -2704,9 +2704,53 @@ html, body {
   background: #FFFFFF;
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  padding: 22px;
-  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
   box-shadow: var(--shadow-sm);
+  height: 100%;
+}
+
+.formulations-detail-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 22px 14px 22px;
+}
+
+.formulations-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  padding: 14px 22px 18px 22px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+  z-index: 10;
+  display: flex;
+}
+
+.formulations-sticky-footer .btn-primary {
+  width: 100%;
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.formulations-sticky-footer .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(22, 163, 74, 0.45);
 }
 
 .formulations-detail-name {

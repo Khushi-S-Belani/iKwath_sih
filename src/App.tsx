@@ -99,14 +99,16 @@ export default function App() {
     setCleaningPhase('RINSING');
     setCurrentSection('cleaning');
     machine.startCleaning();
-    setTimeout(() => setCleaningPhase('DRAINING'), 4000);
+    setTimeout(() => {
+      setCleaningPhase('DRAINING');
+    }, 3500);
     setTimeout(() => {
       setCleaningPhase('COMPLETE');
       if (currentBrewRecord) {
         setCurrentBrewRecord((prev) => prev ? { ...prev, cleaning_completed: true } : null);
         setBrewHistory((prev) => prev.map((r) => r.brew_id === currentBrewRecord.brew_id ? { ...r, cleaning_completed: true } : r));
       }
-    }, 8000);
+    }, 7000);
   }, [machine, currentBrewRecord]);
 
   const handleCleaningComplete = useCallback(() => {
@@ -114,6 +116,13 @@ export default function App() {
     setPodState('IDLE');
     setCurrentSection('home');
     machine.resetToIdle();
+  }, [machine]);
+
+  const handleSkipPhase = useCallback(() => {
+    if (esp32Serial.isConnected()) {
+      esp32Serial.skipPhase();
+    }
+    machine.skipPhase();
   }, [machine]);
 
   // Listen to ESP32 connection state & auto-reconnect on page load
@@ -357,6 +366,7 @@ export default function App() {
           <WaterFillScreen
             brewState={brewState}
             formulation={selectedFormulation}
+            onSkipPhase={handleSkipPhase}
           />
         );
       case 'live-brew':
@@ -369,6 +379,7 @@ export default function App() {
             onResume={() => machine.setPaused(false)}
             onCancel={handleCancelBrew}
             onViewDetails={() => setCurrentSection('reduction')}
+            onSkipPhase={handleSkipPhase}
           />
         );
       case 'reduction':
@@ -378,6 +389,7 @@ export default function App() {
             formulation={selectedFormulation}
             massHistory={massHistory}
             tempHistory={tempHistory}
+            onSkipPhase={handleSkipPhase}
           />
         );
       case 'filtration':
@@ -423,6 +435,8 @@ export default function App() {
     }
   };
 
+  const showForwardButton = brewInProgress || ['water-fill', 'live-brew', 'reduction', 'filtration', 'pod'].includes(currentSection);
+
   return (
     <div
       ref={outerWrapRef}
@@ -458,7 +472,33 @@ export default function App() {
                   <div className="screen-title">{meta.title}</div>
                   <div className="screen-sub">{meta.sub}</div>
                 </div>
-                <div className="topbar-right">
+                <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {/* Forward / Next Step Quick Button */}
+                  {showForwardButton && (
+                    <button
+                      id="btn-topbar-forward"
+                      className="btn-primary"
+                      onClick={currentSection === 'pod' ? handleStartBrew : handleSkipPhase}
+                      style={{
+                        background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                        border: 'none',
+                        color: '#fff',
+                        padding: '6px 14px',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)',
+                      }}
+                      title="Advance to next step"
+                    >
+                      <span>⏭</span> {currentSection === 'pod' ? 'Lock & Start Fill' : 'Forward Next Step'}
+                    </button>
+                  )}
+
                   {/* Brew active indicator */}
                   {brewInProgress && (
                     <div className="brew-active-badge">

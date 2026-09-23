@@ -13,7 +13,7 @@ graph TD
     C -->|Step 1: Pod Insertion| D[Servo on GPIO 14 Opens Flap to 90° for 5s, then Closes to 0°]
     D -->|Step 2: Water Fill| E[Relay 2 on GPIO 26 Turns Pump ON -> 400 mL via Flow Sensor GPIO 18]
     E -->|Step 3: Soaking| F[5-Second Timed Soaking Transition]
-    F -->|Step 4: Heating| G[Relay 1 on GPIO 27 Turns Heater ON -> DHT11 GPIO 15 Waits for 35°C]
+    F -->|Step 4: Heating| G[Relay 1 on GPIO 27 Turns Heater ON -> DS18B20 GPIO 15 Waits for 35°C]
     G -->|Step 5: Stirring| H[ULN2003A + 28BYJ-48 Stepper GPIO 13,12,19,23 Agitates for 10s]
     H -->|Step 6: Reduction & Filtration| I[Reduction 5s -> SS316 Filtration 5s -> Dispensing 5s]
     I -->|Step 7: Ready| J[3 Victory Beeps on Buzzer GPIO 25 -> Brew Passport Displayed]
@@ -28,7 +28,7 @@ graph TD
 | **Push Button** | Terminal 1<br>Terminal 2 | **GPIO 4**<br>**GND** | 3.3V Logic | `INPUT_PULLUP` (Active LOW). Pressing grounds GPIO 4. |
 | **Servo Motor** *(Pod Flap)* | PWM Signal (Orange/Yellow)<br>VCC (Red)<br>GND (Brown/Black) | **GPIO 14**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC | 0° = Closed Flap<br>90° = Open (5 seconds for pod drop) |
 | **Hall Flow Sensor** *(Water)* | Pulse Signal (Yellow)<br>VCC (Red)<br>GND (Black) | **GPIO 18**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC | Hardware Interrupt (`FALLING`). 400 mL cutoff. |
-| **DHT11 Sensor** *(Temp & Humidity)* | DATA (Pin 2 / S)<br>VCC (Pin 1 / +)<br>GND (Pin 4 / -) | **GPIO 15**<br>**3.3V (or 5V)**<br>**GND** | 3.3V – 5V DC | Monitors decoction temperature until **35°C**. |
+| **DS18B20 Sensor** *(High-Precision Temp)* | DATA (Yellow / Signal)<br>VCC (Red / +)<br>GND (Black / -) | **GPIO 15**<br>**3.3V (or 5V)**<br>**GND** | 3.3V – 5V DC | OneWire immersion probe (4.7kΩ pull-up to 3.3V). Monitors decoction temperature until **35°C**. |
 | **28BYJ-48 Stepper** *(ULN2003A Driver)* | `IN1`<br>`IN2`<br>`IN3`<br>`IN4`<br>`+` (VCC)<br>`-` (GND) | **GPIO 13**<br>**GPIO 12**<br>**GPIO 19**<br>**GPIO 23**<br>**5V (Ext 5V)**<br>**GND** | 5V DC | 4-phase 8-step half-stepping unipolar motor for non-blocking 10-second liquid agitation. |
 | **2-Channel Relay Module** *(2PH63091A)* | `IN1` (Heater)<br>`IN2` (Water Pump)<br>`VCC`<br>`GND` | **GPIO 27**<br>**GPIO 26**<br>**5V (Vin / Ext 5V)**<br>**GND** | 5V DC Signal | **Active LOW** optocoupler triggers:<br>• `IN1` = Heating element / hotplate<br>• `IN2` = Peristaltic / DC water pump |
 | **Active Buzzer** | Positive (+) Long Leg<br>Negative (-) Short Leg | **GPIO 25**<br>**GND** | 3.3V – 5V DC | Audible chirps and 3 victory beeps on completion. |
@@ -123,16 +123,21 @@ The 2-channel relay controls the high-power loads (**Heater** and **Water Pump**
 
 ---
 
-### E. DHT11 Temperature & Humidity Sensor (GPIO 15)
+### E. DS18B20 Waterproof Temperature Sensor (GPIO 15)
 ```
-  3-Pin DHT11 Module           ESP32 DevKit V1
- +--------------------+       +----------------+
- | S / DATA / OUT     |------>| GPIO 15        |
- | + / VCC            |------>| 3.3V (or 5V)   |
- | - / GND            |------>| Common GND     |
- +--------------------+       +----------------+
+  DS18B20 Temp Sensor Probe    ESP32 DevKit V1
+ +--------------------------+ +----------------+
+ | Yellow / Signal (DATA)   |------>| GPIO 15        |
+ | Red (VCC)                |------>| 3.3V (or 5V)   |
+ | Black (GND)              |------>| Common GND     |
+ +--------------------------+ +----------------+
+              |
+       [4.7kΩ Resistor]
+              |
+         Connects to 3.3V
 ```
-- Measures live decoction temperature with 0.1°C precision.
+- **4.7kΩ Pull-up Resistor**: Connect a 4.7kΩ resistor between the **Yellow (DATA)** wire and **Red (3.3V)** wire.
+- **Precision**: Measures immersion temperature with ±0.25°C precision (-55°C to +125°C).
 - Signals completion when temperature reaches the user's **35°C target**.
 
 ---

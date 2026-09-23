@@ -106,16 +106,20 @@ export const CleaningScreen: React.FC<CleaningScreenProps> = ({ cleaningPhase, o
       )}
 
       {/* Actions */}
-      <div className="cleaning-actions">
-        {cleaningPhase === 'COMPLETE' && (
-          <button id="btn-cleaning-done" className="btn-primary" onClick={onComplete}>
+      <div className="cleaning-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '20px' }}>
+        {cleaningPhase === 'COMPLETE' ? (
+          <button id="btn-cleaning-done" className="btn-primary" onClick={onComplete} style={{ minWidth: 220 }}>
             ✓ System Ready — New Brew
           </button>
-        )}
-        {cleaningPhase === 'REQUIRED' && (
-          <button id="btn-back-cleaning" className="btn-secondary" onClick={onBack}>
-            Back
-          </button>
+        ) : (
+          <>
+            <button id="btn-cleaning-skip" className="btn-secondary" onClick={onComplete}>
+              ⏭ Skip / Finish Cleaning
+            </button>
+            <button id="btn-cleaning-done-direct" className="btn-primary" onClick={onComplete}>
+              ✓ Complete & Return Home
+            </button>
+          </>
         )}
       </div>
     </div>

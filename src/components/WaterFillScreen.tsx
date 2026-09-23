@@ -7,11 +7,13 @@ import { FormulationProfile } from '../types';
 interface WaterFillScreenProps {
   brewState: LiveBrewState;
   formulation: FormulationProfile;
+  onSkipPhase?: () => void;
 }
 
 export const WaterFillScreen: React.FC<WaterFillScreenProps> = ({
   brewState,
   formulation,
+  onSkipPhase,
 }) => {
   const { sensor, stage, elapsed_sec } = brewState;
   const targetMass = formulation.water_ml; // mL ≈ g for water
@@ -115,8 +117,22 @@ export const WaterFillScreen: React.FC<WaterFillScreenProps> = ({
             )}
           </div>
 
+          {/* Forward Button */}
+          {onSkipPhase && (
+            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+              <button
+                id="btn-skip-waterfill"
+                className="btn-primary"
+                onClick={onSkipPhase}
+                style={{ background: '#059669', borderColor: '#10b981', color: '#fff', fontSize: '0.85rem', padding: '8px 16px', fontWeight: 600 }}
+              >
+                ⏭ Forward to Soaking / Heating
+              </button>
+            </div>
+          )}
+
           {/* Elapsed */}
-          <div className="wf-elapsed">
+          <div className="wf-elapsed" style={{ marginTop: 8 }}>
             Elapsed: {Math.floor(elapsed_sec / 60).toString().padStart(2, '0')}:{(elapsed_sec % 60).toString().padStart(2, '0')}
           </div>
         </div>

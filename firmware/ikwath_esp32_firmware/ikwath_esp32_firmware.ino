@@ -1,13 +1,13 @@
 /*
   =============================================================================
   iKwath - Smart Automated Ayurvedic Kwatha / Decoction Machine
-  ESP32 Master Controller Firmware (v4.3 - Active Batch Agitation @ 15 RPM)
+  ESP32 Master Controller Firmware (v4.4 - DS18B20 Temp Sensor @ GPIO 15)
   =============================================================================
   Hardware Pinout Mapping:
   - GPIO 2:  Onboard Blue Status LED (Solid ON when running)
   - GPIO 4:  Push Button (Active LOW with internal pull-up)
   - GPIO 14: Servo Motor (Pod Flap / Door 0° closed ↔ 90° open)
-  - GPIO 15: DHT11 Sensor Data (Temperature & Humidity)
+  - GPIO 15: DS18B20 High-Precision Temperature Sensor Data (OneWire Bus)
   - GPIO 18: Hall Flow Sensor (Hardware Interrupt)
   - GPIO 25: Active Piezo Buzzer (2.4kHz notification beeper)
   - GPIO 26: Relay Channel 2 (Peristaltic / Water Pump - Active LOW)
@@ -26,7 +26,7 @@
   3. Pod Insertion: Servo opens to 90° for 5 seconds, then closes to 0°.
   4. Water Fill: Relay 2 turns pump ON; flows 400 mL via flow sensor on GPIO 18.
   5. Soaking: 5-second timed soaking step.
-  6. Heating: Relay 1 turns heater ON; DHT11 on GPIO 15 monitors until 35°C is reached.
+  6. Heating: Relay 1 turns heater ON; DS18B20 on GPIO 15 monitors until 35°C is reached.
   7. Stirring: 28BYJ-48 stepper motor stirs continuously in one direction for 10 seconds.
   8. Reduction, Filtration & Dispense: 5s pause each, then ready & 3 victory beeps!
   =============================================================================
@@ -35,6 +35,8 @@
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <Stepper.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 // =============================================================================
 // PIN DEFINITIONS
@@ -42,7 +44,7 @@
 #define PIN_LED_BUILTIN       2   // Onboard Blue LED
 #define PIN_BUTTON_START      4   // Push Button (Active LOW with internal pull-up)
 #define PIN_SERVO_POD_FLAP   14   // Servo: Herbal Pod Dispenser Flap
-#define PIN_DHT_DATA         15   // DHT11 Data Pin
+#define PIN_DS18B20_DATA     15   // DS18B20 OneWire Data Pin (GPIO 15)
 #define PIN_FLOW_SENSOR      18   // Flow Sensor Pulse Input (Interrupt)
 #define PIN_BUZZER           25   // Active Buzzer Positive
 #define PIN_PUMP_RELAY       26   // Relay Channel 2 (Water Pump)
@@ -97,77 +99,14 @@ const char* PHASE_NAMES[] = {
 };
 
 // =============================================================================
-// ZERO-DEPENDENCY DHT11 SENSOR CLASS
+// DS18B20 ONEWIRE TEMPERATURE SENSOR
 // =============================================================================
-class SimpleDHT11 {
-private:
-  uint8_t _pin;
-public:
-  SimpleDHT11(uint8_t pin) : _pin(pin) {}
-
-  void begin() {
-    pinMode(_pin, INPUT_PULLUP);
-  }
-
-  bool read(float &tempC, float &humidity) {
-    uint8_t data[5] = {0, 0, 0, 0, 0};
-
-    // 1. Send Start Signal to DHT11 (Hold LOW for 20ms)
-    pinMode(_pin, OUTPUT);
-    digitalWrite(_pin, LOW);
-    delay(20);
-    digitalWrite(_pin, HIGH);
-    delayMicroseconds(30);
-    pinMode(_pin, INPUT_PULLUP);
-
-    // 2. Wait for DHT11 Response (80µs LOW, then 80µs HIGH)
-    unsigned long timeout = micros();
-    while (digitalRead(_pin) == HIGH) {
-      if (micros() - timeout > 120) return false;
-    }
-    timeout = micros();
-    while (digitalRead(_pin) == LOW) {
-      if (micros() - timeout > 120) return false;
-    }
-    timeout = micros();
-    while (digitalRead(_pin) == HIGH) {
-      if (micros() - timeout > 120) return false;
-    }
-
-    // 3. Read 40 Data Bits (5 Bytes)
-    for (int i = 0; i < 40; i++) {
-      timeout = micros();
-      while (digitalRead(_pin) == LOW) {
-        if (micros() - timeout > 120) return false;
-      }
-
-      unsigned long pulseStart = micros();
-      while (digitalRead(_pin) == HIGH) {
-        if (micros() - pulseStart > 120) return false;
-      }
-      unsigned long pulseLen = micros() - pulseStart;
-
-      if (pulseLen > 40) {
-        data[i / 8] |= (1 << (7 - (i % 8)));
-      }
-    }
-
-    // 4. Checksum Verification
-    uint8_t checksum = (data[0] + data[1] + data[2] + data[3]) & 0xFF;
-    if (data[4] != checksum || (data[0] == 0 && data[2] == 0)) {
-      return false;
-    }
-
-    humidity = (float)data[0] + ((float)data[1] * 0.1f);
-    tempC = (float)data[2] + ((float)data[3] * 0.1f);
-    return true;
-  }
-};
+OneWire oneWire(PIN_DS18B20_DATA);
+DallasTemperature ds18b20(&oneWire);
 
 // =============================================================================
 // GLOBAL OBJECTS & VARIABLES
 // =============================================================================
-SimpleDHT11 dht(PIN_DHT_DATA);
 Servo servoPodFlap;
 
 MachinePhase currentPhase = PHASE_IDLE;
@@ -180,7 +119,7 @@ unsigned long lastTempReadTime = 0;
 
 // Recipe / Target Parameters
 float targetWaterVolumeMl = 400.0f;
-float targetExtractionTemp = 35.0f; // Target Heating Temperature: 35°C
+float targetExtractionTemp = 90.0f; // Classical Ayurvedic Decoction Temp: 85°C - 92°C
 float targetReductionMl = 100.0f;
 String currentRecipeName = "Ashwagandha Kwatha";
 
@@ -192,11 +131,11 @@ unsigned long lastCalculatedPulses = 0;
 float currentWaterMl = 0.0f;
 float flowRateLpm = 0.0f;
 
-// Live Sensor Readings (DHT11)
+// Live Sensor Readings (DS18B20)
 float currentTempC = 26.0f;
-float currentHumidity = 50.0f;
+float currentHumidity = 0.0f;
 float simulatedTempC = 26.0f;
-bool dhtFound = false;
+bool ds18b20Found = false;
 
 // Relay Polarity Settings (2PH63091A is Active LOW)
 bool relayActiveLow = true;   // Relay 1 (Heater - GPIO 27) Active LOW
@@ -220,6 +159,7 @@ unsigned long lastButtonPressTime = 0;
 // Forward Declarations
 void sendTelemetry();
 void setPhase(MachinePhase nextPhase);
+void advanceToNextPhase();
 
 // =============================================================================
 // INTERRUPT SERVICE ROUTINE FOR FLOW SENSOR (GPIO 18)
@@ -307,29 +247,31 @@ void resetAllActuators() {
 }
 
 // =============================================================================
-// TEMPERATURE & HUMIDITY READING (DHT11 - Sampled Every 800ms)
+// TEMPERATURE READING (DS18B20 OneWire - Sampled Every 800ms Non-Blocking)
 // =============================================================================
 void updateTemperature() {
   unsigned long now = millis();
   if (now - lastTempReadTime < 800) return;
   lastTempReadTime = now;
 
-  float t = 0.0f;
-  float h = 0.0f;
-  bool success = dht.read(t, h);
+  float t = ds18b20.getTempCByIndex(0);
+  // Asynchronously request next conversion (returns immediately)
+  ds18b20.requestTemperatures();
 
-  if (success && t > -10.0f && t < 80.0f) {
+  if (t > -40.0f && t < 125.0f && t != DEVICE_DISCONNECTED_C && t != 85.0f) {
     currentTempC = t;
-    currentHumidity = h;
-    dhtFound = true;
-  } else {
-    dhtFound = false;
+    ds18b20Found = true;
+  } else if (t == 85.0f && ds18b20Found) {
+    // If sensor was already actively running, 85.0C is legitimate hot brew temp
+    currentTempC = t;
+  } else if (t == DEVICE_DISCONNECTED_C || t <= -40.0f) {
+    ds18b20Found = false;
   }
 
-  // Simulation mode support (simulates heating curve if sensor is ambient or disconnected)
+  // Simulation mode support (simulates heating curve up to real formulation target temperature)
   if (tempSimulationMode) {
-    if (relayState && simulatedTempC < 40.0f) {
-      simulatedTempC += 0.5f;
+    if (relayState && simulatedTempC < (targetExtractionTemp + 1.0f)) {
+      simulatedTempC += 0.75f;
     } else if (!relayState && simulatedTempC > 26.0f) {
       simulatedTempC -= 0.2f;
     }
@@ -367,8 +309,10 @@ void sendTelemetry() {
   Serial.print("{\"type\":\"telemetry\"");
   Serial.print(",\"phase\":\""); Serial.print(PHASE_NAMES[currentPhase]); Serial.print("\"");
   Serial.print(",\"temp_c\":"); Serial.print(currentTempC, 1);
-  Serial.print(",\"humidity\":"); Serial.print(currentHumidity, 1);
-  Serial.print(",\"sensor_type\":\"DHT11\"");
+  Serial.print(",\"sensor_type\":\"DS18B20\"");
+  Serial.print(",\"ds18b20_found\":"); Serial.print(ds18b20Found ? "true" : "false");
+  Serial.print(",\"temp_sensor_found\":"); Serial.print(ds18b20Found ? "true" : "false");
+  Serial.print(",\"dht_found\":"); Serial.print(ds18b20Found ? "true" : "false");
   Serial.print(",\"sim_mode\":"); Serial.print(tempSimulationMode ? "true" : "false");
   Serial.print(",\"water_ml\":"); Serial.print(currentWaterMl, 1);
   Serial.print(",\"flow_pulses\":"); Serial.print(flowPulseCount);
@@ -388,7 +332,6 @@ void sendTelemetry() {
   Serial.print(",\"buzzer\":"); Serial.print(buzzerState ? "\"ACTIVE\"" : "\"OFF\"");
   Serial.print(",\"elapsed_sec\":"); Serial.print(elapsedSec);
   Serial.print(",\"paused\":"); Serial.print(isPaused ? "true" : "false");
-  Serial.print(",\"dht_found\":"); Serial.print(dhtFound ? "true" : "false");
   Serial.println("}");
 }
 
@@ -437,38 +380,23 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_HEATING:
-      // 4. Relay 1 Heater ON, DHT11 monitors until 35°C
+      // 4. Relay 1 Heater ON, DS18B20 monitors until target temp
       setPump(false);
       setHeater(true);
       setStepperActive(false);
       beep(120);
-      Serial.println("[STEP 4] Relay 1 ON -> Heating in progress. Waiting for DHT11 >= 35°C...");
+      Serial.printf("[STEP 4] Relay 1 ON -> Heating in progress. Target: %.1f °C (DS18B20)...\n", targetExtractionTemp);
       break;
 
     case PHASE_STIRRING:
       // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 10 seconds
       setPump(false);
       setHeater(false);
-      stepperActive = true;
+      setStepperActive(true);
+      motor.setSpeed(12);
       beep(100, 2);
-      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction for 10 seconds...");
-      sendTelemetry();
-
-      // Active Stirring Execution for exactly 10 seconds in one single direction (Clockwise)
-      {
-        unsigned long stirringStart = millis();
-        motor.setSpeed(12); // Smooth 12 RPM speed
-        
-        while (millis() - stirringStart < 10000) {
-          motor.step(256); // Rotate continuously in one direction (Clockwise)
-          sendTelemetry();
-        }
-      }
-
-      setStepperActive(false);
-      Serial.println("[STIRRING COMPLETE] 10s one-direction stirring finished.");
-      setPhase(PHASE_REDUCTION);
-      return;
+      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction (12 RPM)...");
+      break;
 
     case PHASE_REDUCTION:
       // 6. Reduction step (5 seconds)
@@ -509,6 +437,7 @@ void setPhase(MachinePhase nextPhase) {
       setHeater(false);
       setStepperActive(true);
       beep(150, 2);
+      Serial.println("[CLEANING] Rinse flush active...");
       break;
 
     case PHASE_MANUAL:
@@ -531,6 +460,55 @@ void startBrewProcess() {
 void stopBrewProcess() {
   Serial.println("[CYCLE] Cycle stopped / Reset to IDLE.");
   setPhase(PHASE_IDLE);
+}
+
+void advanceToNextPhase() {
+  Serial.printf("[FORWARD] Advancing from %s to next step...\n", PHASE_NAMES[currentPhase]);
+  beep(80, 1);
+  switch (currentPhase) {
+    case PHASE_IDLE:
+      startBrewProcess();
+      break;
+    case PHASE_POD_DROP:
+      setPodFlap(0);
+      setPhase(PHASE_WATER_FILL);
+      break;
+    case PHASE_WATER_FILL:
+      setPump(false);
+      setPhase(PHASE_SOAKING);
+      break;
+    case PHASE_SOAKING:
+      setPhase(PHASE_HEATING);
+      break;
+    case PHASE_HEATING:
+      setHeater(false);
+      setPhase(PHASE_STIRRING);
+      break;
+    case PHASE_STIRRING:
+      setStepperActive(false);
+      setPhase(PHASE_REDUCTION);
+      break;
+    case PHASE_REDUCTION:
+      setPhase(PHASE_FILTRATION);
+      break;
+    case PHASE_FILTRATION:
+      setPhase(PHASE_DISPENSING);
+      break;
+    case PHASE_DISPENSING:
+      setPump(false);
+      setPhase(PHASE_COMPLETE);
+      break;
+    case PHASE_CLEANING:
+      resetAllActuators();
+      setPhase(PHASE_IDLE);
+      break;
+    case PHASE_COMPLETE:
+      setPhase(PHASE_IDLE);
+      break;
+    default:
+      setPhase(PHASE_IDLE);
+      break;
+  }
 }
 
 // =============================================================================
@@ -559,42 +537,49 @@ void runStateMachine() {
       break;
 
     case PHASE_SOAKING:
-      // 3. Soaking step passes by in 5 seconds
-      if (elapsedInPhase >= 5) {
+      // 3. Soaking step passes by in 10 seconds
+      if (elapsedInPhase >= 10) {
         setPhase(PHASE_HEATING);
       }
       break;
 
     case PHASE_HEATING:
-      // 4. Heater ON until DHT11 temperature reaches target °C (with safety watchdog)
-      if (currentTempC >= targetExtractionTemp || elapsedInPhase >= 120) {
+      // 4. Heater ON until DS18B20 temperature reaches target °C (with safety watchdog: 180s)
+      if (currentTempC >= targetExtractionTemp || elapsedInPhase >= 180) {
         setHeater(false);
-        Serial.printf("[HEATING COMPLETE] Reached %.1f °C!\n", currentTempC);
+        Serial.printf("[HEATING COMPLETE] Current Temp: %.1f °C (Target: %.1f °C)!\n", currentTempC, targetExtractionTemp);
         setPhase(PHASE_STIRRING);
       }
       break;
 
     case PHASE_STIRRING:
-      // Handled inside setPhase(PHASE_STIRRING)
+      // 5. Stir continuously in one direction for 12 seconds (in smooth non-blocking step chunks)
+      if (elapsedInPhase < 12) {
+        motor.step(64);
+      } else {
+        setStepperActive(false);
+        Serial.println("[STIRRING COMPLETE] 12s one-direction stirring finished.");
+        setPhase(PHASE_REDUCTION);
+      }
       break;
 
     case PHASE_REDUCTION:
-      // 6. Reduction step passes by in 5 seconds
-      if (elapsedInPhase >= 5) {
+      // 6. Reduction step passes by in 15 seconds (at least 10-15s to display live reduction metrics & charts)
+      if (elapsedInPhase >= 15) {
         setPhase(PHASE_FILTRATION);
       }
       break;
 
     case PHASE_FILTRATION:
-      // 7. Filtration step passes by in 5 seconds
-      if (elapsedInPhase >= 5) {
+      // 7. Filtration step passes by in 10 seconds
+      if (elapsedInPhase >= 10) {
         setPhase(PHASE_DISPENSING);
       }
       break;
 
     case PHASE_DISPENSING:
-      // 8. Dispenses for 5 seconds
-      if (elapsedInPhase >= 5) {
+      // 8. Dispenses for 10 seconds
+      if (elapsedInPhase >= 10) {
         setPump(false);
         setPhase(PHASE_COMPLETE);
       }
@@ -698,14 +683,17 @@ void processSerialCommand(String cmd) {
 
     if (action == "start" || action == "start_brew" || action == "prepare_pod" || action == "select_recipe") {
       targetWaterVolumeMl = getJsonFloat(cmd, "set_water", 400.0f);
-      targetExtractionTemp = getJsonFloat(cmd, "set_temp", 35.0f);
+      targetExtractionTemp = getJsonFloat(cmd, "set_temp", 90.0f);
       String rName = getJsonString(cmd, "recipe");
       if (rName.length() > 0) currentRecipeName = rName;
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
-      Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C (35°C Limit)\n",
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 100.0f) targetExtractionTemp = 90.0f;
+      Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C\n",
                     currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
       startBrewProcess(); // Enters PHASE_POD_DROP, opens servo to 90° and waits for pod insertion & push button press
+      return;
+    } else if (action == "next_phase" || action == "skip_phase" || action == "forward" || action == "next_stage") {
+      advanceToNextPhase();
       return;
     } else if (action == "pod_inserted" || action == "confirm_pod" || action == "pod_close" || action == "start_fill") {
       Serial.println("[POD INSERTED] Pod confirmed inserted! Closing pod door (0°) and starting Water Fill...");
@@ -715,12 +703,12 @@ void processSerialCommand(String cmd) {
       return;
     } else if (action == "sync_recipe") {
       targetWaterVolumeMl = getJsonFloat(cmd, "set_water", 400.0f);
-      targetExtractionTemp = getJsonFloat(cmd, "set_temp", 35.0f);
+      targetExtractionTemp = getJsonFloat(cmd, "set_temp", 90.0f);
       String rName = getJsonString(cmd, "recipe");
       if (rName.length() > 0) currentRecipeName = rName;
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
-      Serial.printf("[CONFIG] Synced recipe: %s | Water: %.0f mL | Target Temp: %.0f °C (35°C Limit)\n",
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 100.0f) targetExtractionTemp = 90.0f;
+      Serial.printf("[CONFIG] Synced recipe: %s | Water: %.0f mL | Target Temp: %.0f °C\n",
                     currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
       sendTelemetry();
       return;
@@ -810,6 +798,8 @@ void processSerialCommand(String cmd) {
   // Plain text command parser fallback
   if (cmd.equalsIgnoreCase("START_BREW") || cmd.equalsIgnoreCase("START")) {
     startBrewProcess();
+  } else if (cmd.equalsIgnoreCase("NEXT_PHASE") || cmd.equalsIgnoreCase("SKIP_PHASE") || cmd.equalsIgnoreCase("FORWARD") || cmd.equalsIgnoreCase("NEXT_STAGE")) {
+    advanceToNextPhase();
   } else if (cmd.startsWith("START:")) {
     int firstColon = cmd.indexOf(':');
     int secondColon = cmd.indexOf(':', firstColon + 1);
@@ -823,7 +813,7 @@ void processSerialCommand(String cmd) {
         targetWaterVolumeMl = cmd.substring(secondColon + 1).toFloat();
       }
       if (targetWaterVolumeMl <= 0) targetWaterVolumeMl = 400.0f;
-      if (targetExtractionTemp <= 0 || targetExtractionTemp > 35.0f) targetExtractionTemp = 35.0f;
+      if (targetExtractionTemp <= 0 || targetExtractionTemp > 100.0f) targetExtractionTemp = 90.0f;
     }
     startBrewProcess();
   } else if (cmd.equalsIgnoreCase("STOP_BREW") || cmd.equalsIgnoreCase("STOP") || cmd.equalsIgnoreCase("RESET")) {
@@ -874,7 +864,7 @@ void processSerialCommand(String cmd) {
     tempSimulationMode = !tempSimulationMode;
     Serial.printf("[CONFIG] Temp Simulation: %s\n", tempSimulationMode ? "ENABLED" : "DISABLED");
   } else if (cmd.equalsIgnoreCase("PING")) {
-    Serial.println("{\"type\":\"pong\",\"version\":\"4.3\"}");
+    Serial.println("{\"type\":\"pong\",\"version\":\"4.4\"}");
   }
 }
 
@@ -919,8 +909,15 @@ void setup() {
   pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PIN_FLOW_SENSOR), flowPulseISR, FALLING);
 
-  // DHT11 Sensor
-  dht.begin();
+  // DS18B20 High-Precision Temperature Sensor Setup on GPIO 15
+  Serial.println("[SENSOR] Initializing DS18B20 Temperature Sensor on GPIO 15...");
+  ds18b20.begin();
+  ds18b20.setResolution(10); // 10-bit resolution (0.25°C precision, 187.5ms conversion)
+  ds18b20.setWaitForConversion(false); // Non-blocking conversion
+  ds18b20.requestTemperatures(); // First temperature conversion request
+  int devCount = ds18b20.getDeviceCount();
+  Serial.printf("[SENSOR] Found %d OneWire device(s) on GPIO 15.\n", devCount);
+  ds18b20Found = (devCount > 0);
 
   // Servo Attachment
   ESP32PWM::allocateTimer(0);
