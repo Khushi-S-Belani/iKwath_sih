@@ -63,7 +63,8 @@ const int STEPS_PER_REV = 2048;
 Stepper motor(STEPS_PER_REV, IN1, IN3, IN2, IN4);
 
 // Flow Sensor Calibration (Pulses per mL)
-#define FLOW_CALIBRATION_FACTOR 5.88f
+// Calibration: 18,000 pulses = 400 mL => 18000 / 400 = 45.0 pulses/mL (45,000 pulses/L)
+#define FLOW_CALIBRATION_FACTOR 45.0f
 
 // =============================================================================
 // STATE MACHINE DEFINITION
@@ -788,9 +789,9 @@ void processSerialCommand(String cmd) {
       return;
     } else if (action == "set_flow_cal" || action == "set_calibration") {
       float factor = getJsonFloat(cmd, "factor", FLOW_CALIBRATION_FACTOR);
-      if (factor > 0.1f && factor < 50.0f) {
+      if (factor > 0.01f && factor < 500.0f) {
         flowCalibrationFactor = factor;
-        Serial.printf("[CONFIG] 6mm Flow Sensor Calibration set to: %.2f pulses/mL\n", flowCalibrationFactor);
+        Serial.printf("[CONFIG] Flow Sensor Calibration set to: %.2f pulses/mL (18000 pulses = 400 mL)\n", flowCalibrationFactor);
       }
       sendTelemetry();
       return;
@@ -813,9 +814,9 @@ void processSerialCommand(String cmd) {
   } else if (cmd.startsWith("CAL:") || cmd.startsWith("FLOW_CAL:")) {
     int colon = cmd.indexOf(':');
     float factor = cmd.substring(colon + 1).toFloat();
-    if (factor > 0.1f && factor < 50.0f) {
+    if (factor > 0.01f && factor < 500.0f) {
       flowCalibrationFactor = factor;
-      Serial.printf("[CONFIG] 6mm Flow Sensor Calibration factor set to: %.2f pulses/mL\n", flowCalibrationFactor);
+      Serial.printf("[CONFIG] Flow Sensor Calibration factor set to: %.2f pulses/mL\n", flowCalibrationFactor);
     }
     sendTelemetry();
   } else if (cmd.startsWith("START:")) {

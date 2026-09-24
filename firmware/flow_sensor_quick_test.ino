@@ -18,9 +18,8 @@
 #define PIN_FLOW_SENSOR   18  // GPIO 18 Interrupt
 #define PIN_LED_BUILTIN    2  // Built-in Blue LED flashes on water flow
 
-// Default calibration: ~5.88 pulses per mL (for YF-S401 6mm sensor)
-// YF-S201 is typically ~4.5 to 7.5 pulses per mL
-float calibrationFactor = 5.88f; 
+// Calibration: 18,000 pulses = 400 mL => 18000 / 400 = 45.0 pulses/mL (45,000 pulses/L)
+float calibrationFactor = 45.0f; 
 
 volatile unsigned long pulseCount = 0;
 volatile unsigned long lastPulseTime = 0;

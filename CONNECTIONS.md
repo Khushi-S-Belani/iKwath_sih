@@ -66,7 +66,7 @@ This document contains **detailed, standardized reference tables** for all circu
 
 | Sensor | ESP32 Pin | Default Calibration | Target / Cutoff Value | Fallback / Timeout Safety | Action on Target Reached |
 | :--- | :---: | :--- | :---: | :---: | :--- |
-| **Hall Flow Sensor** | **GPIO 18** | `5.88 pulses / mL`<br>(approx. 2352 pulses for 400mL) | **400.0 mL** | 120 seconds timeout | Turns Relay 2 (Pump) OFF; advances to `SOAKING`. |
+| **Hall Flow Sensor** | **GPIO 18** | `45.0 pulses / mL`<br>(18,000 pulses for 400mL) | **400.0 mL** | 120 seconds timeout | Turns Relay 2 (Pump) OFF; advances to `SOAKING`. |
 | **DS18B20 Temperature** | **GPIO 15** | OneWire Digital (°C, 0.25°C precision) | **85.0°C – 92.0°C** | 180 seconds timeout | Turns Relay 1 (Heater) OFF; advances to `STIRRING`. |
 | **Push Button** | **GPIO 4** | Internal Pull-up (Active LOW) | Pressed (`LOW`) | 250 ms debounce | Wakes system on Home screen / Locks pod gate & starts water fill. |
 

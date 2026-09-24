@@ -925,7 +925,7 @@ export const HardwareControlModal: React.FC<HardwareControlModalProps> = ({
                     <td><strong>Flow Sensor (6mm)</strong></td>
                     <td><span className="hw-pin-tag">GPIO 18</span></td>
                     <td>5V / 3.3V</td>
-                    <td>Interrupt pin counts water pulses (5.88 pulses/mL).</td>
+                    <td>Interrupt pin counts water pulses (45.0 pulses/mL | 18,000 pulses for 400mL).</td>
                   </tr>
                   <tr>
                     <td><strong>Servo 1 (Stirrer)</strong></td>

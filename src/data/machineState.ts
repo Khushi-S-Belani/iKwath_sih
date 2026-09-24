@@ -93,7 +93,7 @@ function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targe
       s.mass_g = parseFloat(newMass.toFixed(1));
       s.water_ml = s.mass_g;
       s.flow_rate_lpm = s.mass_g >= targetWaterMl ? 0 : 2.45 + (Math.random() - 0.5) * 0.15;
-      s.flow_pulses = Math.round(s.mass_g * 5.88);
+      s.flow_pulses = Math.round(s.mass_g * 45.0); // 18,000 pulses = 400 mL
       break;
     }
 
