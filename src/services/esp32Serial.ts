@@ -13,6 +13,8 @@ export interface ESP32Telemetry {
   flow_rate_lpm?: number;
   flow_pulses?: number;
   flow_sensor_ok?: boolean;
+  flow_cal?: number;
+  pipe_diameter_mm?: number;
   heater: 'ACTIVE' | 'OFF';
   relay_active_low?: boolean;
   pump: 'ACTIVE' | 'OFF';
@@ -442,6 +444,10 @@ class ESP32SerialService {
     return await this.sendCommand({ cmd: 'invert_buzzer' });
   }
 
+  public async setFlowCalibration(factor: number): Promise<boolean> {
+    return await this.sendCommand({ cmd: 'set_flow_cal', factor });
+  }
+
   public async startCleaning(): Promise<boolean> {
     return await this.sendCommand({ cmd: 'clean' });
   }
@@ -522,6 +528,8 @@ class ESP32SerialService {
               flow_rate_lpm: typeof data.flow_rate_lpm === 'number' ? data.flow_rate_lpm : 0,
               flow_pulses: typeof data.flow_pulses === 'number' ? data.flow_pulses : 0,
               flow_sensor_ok: data.flow_sensor_ok !== undefined ? Boolean(data.flow_sensor_ok) : true,
+              flow_cal: typeof data.flow_cal === 'number' ? data.flow_cal : 5.88,
+              pipe_diameter_mm: typeof data.pipe_diameter_mm === 'number' ? data.pipe_diameter_mm : 6,
               heater: data.heater === 'ACTIVE' ? 'ACTIVE' : 'OFF',
               relay_active_low: data.relay_active_low !== undefined ? Boolean(data.relay_active_low) : true,
               pump: data.pump === 'ACTIVE' ? 'ACTIVE' : 'OFF',

@@ -330,6 +330,8 @@ void sendTelemetry() {
   Serial.print(",\"stepper_rpm\":"); Serial.print(stepperSpeedRpm, 0);
   Serial.print(",\"pod_deg\":"); Serial.print(currentPodAngle);
   Serial.print(",\"buzzer\":"); Serial.print(buzzerState ? "\"ACTIVE\"" : "\"OFF\"");
+  Serial.print(",\"flow_cal\":"); Serial.print(flowCalibrationFactor, 2);
+  Serial.print(",\"pipe_diameter_mm\":6");
   Serial.print(",\"elapsed_sec\":"); Serial.print(elapsedSec);
   Serial.print(",\"paused\":"); Serial.print(isPaused ? "true" : "false");
   Serial.println("}");
@@ -784,6 +786,14 @@ void processSerialCommand(String cmd) {
       Serial.printf("[CONFIG] Relay 2 (Pump) Polarity: %s\n", pumpActiveLow ? "Active LOW" : "Active HIGH");
       setPump(pumpState);
       return;
+    } else if (action == "set_flow_cal" || action == "set_calibration") {
+      float factor = getJsonFloat(cmd, "factor", FLOW_CALIBRATION_FACTOR);
+      if (factor > 0.1f && factor < 50.0f) {
+        flowCalibrationFactor = factor;
+        Serial.printf("[CONFIG] 6mm Flow Sensor Calibration set to: %.2f pulses/mL\n", flowCalibrationFactor);
+      }
+      sendTelemetry();
+      return;
     } else if (action == "toggle_sim") {
       tempSimulationMode = !tempSimulationMode;
       Serial.printf("[CONFIG] Temp Simulation: %s\n", tempSimulationMode ? "ENABLED" : "DISABLED");
@@ -800,6 +810,14 @@ void processSerialCommand(String cmd) {
     startBrewProcess();
   } else if (cmd.equalsIgnoreCase("NEXT_PHASE") || cmd.equalsIgnoreCase("SKIP_PHASE") || cmd.equalsIgnoreCase("FORWARD") || cmd.equalsIgnoreCase("NEXT_STAGE")) {
     advanceToNextPhase();
+  } else if (cmd.startsWith("CAL:") || cmd.startsWith("FLOW_CAL:")) {
+    int colon = cmd.indexOf(':');
+    float factor = cmd.substring(colon + 1).toFloat();
+    if (factor > 0.1f && factor < 50.0f) {
+      flowCalibrationFactor = factor;
+      Serial.printf("[CONFIG] 6mm Flow Sensor Calibration factor set to: %.2f pulses/mL\n", flowCalibrationFactor);
+    }
+    sendTelemetry();
   } else if (cmd.startsWith("START:")) {
     int firstColon = cmd.indexOf(':');
     int secondColon = cmd.indexOf(':', firstColon + 1);
