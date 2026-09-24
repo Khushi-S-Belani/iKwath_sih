@@ -23,7 +23,7 @@ This document contains **detailed, standardized reference tables** for all circu
 
 | Relay Channel | ESP32 Control Pin | Trigger Logic | Module Terminal | Connected To | Wire / Voltage | Operation |
 | :--- | :---: | :---: | :--- | :--- | :--- | :--- |
-| **Channel 1**<br>*(Heater)* | **GPIO 27** | **Active LOW**<br>(0V = ON,<br>3.3V = OFF) | **`COM1`**<br>**`NO1`**<br>`NC1` | Power Supply Live / (+)<br>Heater Element Live / (+)<br>*(Unconnected)* | AC Live or DC (+)<br>AC Live or DC (+)<br>— | Closes contact during **Heating Phase** until DHT11 temperature $\ge$ **35°C**. |
+| **Channel 1**<br>*(Heater)* | **GPIO 27** | **Active LOW**<br>(0V = ON,<br>3.3V = OFF) | **`COM1`**<br>**`NO1`**<br>`NC1` | Power Supply Live / (+)<br>Heater Element Live / (+)<br>*(Unconnected)* | AC Live or DC (+)<br>AC Live or DC (+)<br>— | Closes contact during **Heating Phase** until DS18B20 temperature reaches formulation target (85°C–92°C). |
 | **Channel 2**<br>*(Water Pump)* | **GPIO 26** | **Active LOW**<br>(0V = ON,<br>3.3V = OFF) | **`COM2`**<br>**`NO2`**<br>`NC2` | Pump Supply (+12V or +5V)<br>Water Pump (+) Lead<br>*(Unconnected)* | DC (+12V / +5V)<br>DC (+12V / +5V)<br>— | Closes contact during **Water Fill Phase** until flow sensor registers **400 mL**. |
 
 > [!IMPORTANT]
@@ -38,7 +38,7 @@ This document contains **detailed, standardized reference tables** for all circu
 
 | Power Rail | Voltage Level | Powered By | Supplies Power To | Notes & Precautions |
 | :--- | :---: | :--- | :--- | :--- |
-| **3.3V Rail** | **3.3V DC** | ESP32 Internal LDO (3V3 Pin) | • Push Button Pull-up<br>• DHT11 Sensor VCC<br>• Active Buzzer Logic | Max 250mA total draw. Do not connect motors or relays here. |
+| **3.3V Rail** | **3.3V DC** | ESP32 Internal LDO (3V3 Pin) | • Push Button Pull-up<br>• DS18B20 Sensor VCC<br>• Active Buzzer Logic | Max 250mA total draw. Do not connect motors or relays here. |
 | **5V Rail** | **5V DC** | ESP32 Vin (USB 5V) OR External 5V 2A–3A Supply | • 2-Channel Relay VCC<br>• Hall Flow Sensor VCC<br>• Pod Flap Servo VCC<br>• ULN2003A Stepper VCC | High current rail. External 5V 2A supply recommended for smooth motor motion. |
 | **12V Rail** *(Optional)* | **12V DC** | External 12V 2A DC Adapter | • Peristaltic Pump DC Motor (Switched via Relay 2) | Dedicated motor rail. |
 | **Common GND** | **0V (GND)** | Interconnected Common Ground Bus | • ESP32 GND<br>• External 5V GND<br>• External 12V GND<br>• All sensor & driver GNDs | **All grounds MUST be connected together** to maintain a common voltage reference. |
@@ -47,7 +47,7 @@ This document contains **detailed, standardized reference tables** for all circu
 
 ## 4. 28BYJ-48 Stepper Motor & ULN2003A Driver Table
 
-| Motor Wire Color | Internal Phase Coil | ULN2003A Driver Output | Driver Input Pin | ESP32 GPIO Pin | Dual-Phase High-Torque Matrix (4-Step @ 15 RPM) |
+| Motor Wire Color | Internal Phase Coil | ULN2003A Driver Output | Driver Input Pin | ESP32 GPIO Pin | Dual-Phase High-Torque Matrix (4-Step @ 12-15 RPM) |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | **Blue** | Coil 1 | `OUT1` | **`IN1`** | **GPIO 13** | Step 0 (IN1+IN3), Step 3 (IN4+IN1) |
 | **Pink** | Coil 3 | `OUT2` | **`IN2`** | **GPIO 12** | Step 1 (IN3+IN2), Step 2 (IN2+IN4) |
@@ -55,10 +55,10 @@ This document contains **detailed, standardized reference tables** for all circu
 | **Orange** | Coil 4 | `OUT4` | **`IN4`** | **GPIO 23** | Step 2 (IN2+IN4), Step 3 (IN4+IN1) |
 | **Red** | Center Tap (VCC) | Header Pin 5 | `+` (VCC) | External **+5V** | Constant +5V supply (Jumper cap ON) |
 
-- **Exact Speed Calibration**: **15.0 RPM** ($1953\ \mu\text{s}$ per step, 2048 steps per 360° output revolution).
+- **Exact Speed Calibration**: **12.0 - 15.0 RPM** (2048 steps per 360° output revolution).
 - **High-Torque Dual-Coil Drive**: Two coils are energized simultaneously on every step, delivering 100% higher torque to prevent stalling or vibration.
 - **Direction Toggle**: Reverses direction smoothly every 2048 steps (1 full 360° revolution) for thorough fluid agitation.
-- **Automatic De-energize**: After 10 seconds of stirring, all 4 GPIOs (`13, 12, 19, 23`) are set to `LOW` to completely prevent motor coil and ULN2003 chip heating.
+- **Automatic De-energize**: After stirring, all 4 GPIOs (`13, 12, 19, 23`) are set to `LOW` to completely prevent motor coil and ULN2003 chip heating.
 
 ---
 
@@ -66,9 +66,9 @@ This document contains **detailed, standardized reference tables** for all circu
 
 | Sensor | ESP32 Pin | Default Calibration | Target / Cutoff Value | Fallback / Timeout Safety | Action on Target Reached |
 | :--- | :---: | :--- | :---: | :---: | :--- |
-| **Hall Flow Sensor** | **GPIO 18** | `5.88 pulses / mL`<br>(approx. 2352 pulses for 400mL) | **400.0 mL** | 25 seconds timeout | Turns Relay 2 (Pump) OFF; advances to `SOAKING`. |
-| **DHT11 Temperature** | **GPIO 15** | Direct Digital 1-Wire Read (°C) | **35.0 °C** | 45 seconds timeout / Sim mode | Turns Relay 1 (Heater) OFF; advances to `STIRRING`. |
-| **Push Button** | **GPIO 4** | Internal Pull-up (Active LOW) | Pressed (`LOW`) | 250 ms debounce | Wakes system on Home screen / Starts brew cycle. |
+| **Hall Flow Sensor** | **GPIO 18** | `5.88 pulses / mL`<br>(approx. 2352 pulses for 400mL) | **400.0 mL** | 120 seconds timeout | Turns Relay 2 (Pump) OFF; advances to `SOAKING`. |
+| **DS18B20 Temperature** | **GPIO 15** | OneWire Digital (°C, 0.25°C precision) | **85.0°C – 92.0°C** | 180 seconds timeout | Turns Relay 1 (Heater) OFF; advances to `STIRRING`. |
+| **Push Button** | **GPIO 4** | Internal Pull-up (Active LOW) | Pressed (`LOW`) | 250 ms debounce | Wakes system on Home screen / Locks pod gate & starts water fill. |
 
 ---
 
@@ -77,14 +77,14 @@ This document contains **detailed, standardized reference tables** for all circu
 | Step # | Process Phase | Active Actuators & Pins | Monitored Sensor & Pin | Target / Duration | What Happens in the Hardware & Website |
 | :-: | :--- | :--- | :--- | :---: | :--- |
 | **0** | **`IDLE` / Standby** | Status LED (GPIO 2) ON | Push Button (GPIO 4) | User presses button | Machine awakens; Web displays **Kadha Formulation Catalog**. |
-| **1** | **`POD_DROP`** | Servo Motor (GPIO 14) | Internal Timer | **5 Seconds** | Servo flap opens to **90°**. User inserts herbal pod. After 5s, flap closes to **0°**. |
+| **1** | **`POD_DROP`** | Servo Motor (GPIO 14) | Push Button (GPIO 4) | Gate 90° | Servo flap opens to **90°**. User inserts herbal pod and presses GPIO 4 button. Flap closes to **0°**. |
 | **2** | **`WATER_FILL`** | Relay 2 Pump (GPIO 26) ON | Flow Sensor (GPIO 18) | **400 mL** | Pump fills water chamber. Flow sensor counts pulses. Shuts pump OFF at 400 mL. |
-| **3** | **`SOAKING`** | All Actuators OFF | Internal Timer | **5 Seconds** | Timed herbal soaking transition passes by automatically. |
-| **4** | **`HEATING`** | Relay 1 Heater (GPIO 27) ON | DHT11 Sensor (GPIO 15) | **35.0 °C** | Heating element active until decoction liquid reaches 35°C. Heater shuts OFF. |
-| **5** | **`STIRRING`** | Stepper Driver (GPIO 13,12,19,23) ON | Internal Timer | **10 Seconds** | 28BYJ-48 stepper agitates chamber for 10s. All 4 driver coils de-energize to LOW. |
-| **6** | **`REDUCTION`** | All Actuators OFF | Internal Timer | **5 Seconds** | Timed decoction concentration step passes by on display. |
-| **7** | **`FILTRATION`** | All Actuators OFF | Internal Timer | **5 Seconds** | SS316 stainless steel filtration transition step passes by. |
-| **8** | **`DISPENSING`** | Relay 2 Pump (GPIO 26) ON | Internal Timer | **5 Seconds** | Pump dispenses freshly filtered Kadha into the cup. |
+| **3** | **`SOAKING`** | All Actuators OFF | Internal Timer | **10 Seconds** | Timed herbal soaking transition passes by automatically. |
+| **4** | **`HEATING`** | Relay 1 Heater (GPIO 27) ON | DS18B20 Sensor (GPIO 15) | **85.0°C – 92.0°C** | Heating element active until decoction liquid reaches target. Heater shuts OFF. |
+| **5** | **`STIRRING`** | Stepper Driver (GPIO 13,12,19,23) ON | Internal Timer | **12 Seconds** | 28BYJ-48 stepper agitates chamber for 12s. All 4 driver coils de-energize to LOW. |
+| **6** | **`REDUCTION`** | All Actuators OFF | Internal Timer | **15 Seconds** | Timed decoction concentration step displays live mass & reduction curves. |
+| **7** | **`FILTRATION`** | All Actuators OFF | Internal Timer | **10 Seconds** | SS316 stainless steel filtration transition step passes by. |
+| **8** | **`DISPENSING`** | Relay 2 Pump (GPIO 26) ON | Internal Timer | **10 Seconds** | Pump dispenses freshly filtered Kadha into the cup. |
 | **9** | **`READY` / Complete** | Buzzer (GPIO 25) | — | **3 Beeps** | 3 celebratory victory beeps sound; Web displays complete **Brew Passport**! |
 
 ---
@@ -99,7 +99,14 @@ This document contains **detailed, standardized reference tables** for all circu
 | **Push Button** | ESP32 GPIO 4 | Button Pin 1 (Pin 2 to GND) | **BLUE** | 3.3V Logic |
 | **Servo Signal** | ESP32 GPIO 14 | Servo Yellow/Orange PWM Wire | **YELLOW** | 5V PWM |
 | **Flow Sensor Signal** | ESP32 GPIO 18 | Flow Sensor Yellow Pulse Wire | **YELLOW** | 5V Pulse |
-| **DHT11 Data** | ESP32 GPIO 15 | DHT11 Signal / Data Pin | **GREEN** | 3.3V / 5V |
+| **DS18B20 Data** | ESP32 GPIO 15 | DS18B20 Signal / Yellow Data Wire | **YELLOW / GREEN** | 3.3V OneWire Bus |
+| **Stepper IN1** | ESP32 GPIO 13 | ULN2003A IN1 Pin | **BLUE** | 5V Logic |
+| **Stepper IN2** | ESP32 GPIO 12 | ULN2003A IN2 Pin | **PURPLE** | 5V Logic |
+| **Stepper IN3** | ESP32 GPIO 19 | ULN2003A IN3 Pin | **GREY** | 5V Logic |
+| **Stepper IN4** | ESP32 GPIO 23 | ULN2003A IN4 Pin | **WHITE** | 5V Logic |
+| **Relay 1 Signal (Heater)** | ESP32 GPIO 27 | Relay Module IN1 Pin | **YELLOW** | 5V Logic (Active LOW) |
+| **Relay 2 Signal (Pump)** | ESP32 GPIO 26 | Relay Module IN2 Pin | **ORANGE** | 5V Logic (Active LOW) |
+| **Buzzer Positive** | ESP32 GPIO 25 | Buzzer Long Leg (+) | **RED / YELLOW** | 3.3V – 5V |
 | **Stepper IN1** | ESP32 GPIO 13 | ULN2003A IN1 Pin | **BLUE** | 5V Logic |
 | **Stepper IN2** | ESP32 GPIO 12 | ULN2003A IN2 Pin | **PURPLE** | 5V Logic |
 | **Stepper IN3** | ESP32 GPIO 19 | ULN2003A IN3 Pin | **GREY** | 5V Logic |

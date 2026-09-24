@@ -53,7 +53,7 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
 
   const subsystems: SubsystemRow[] = [
     {
-      name: telemetry?.sensor_type ? `${telemetry.sensor_type} Temp Sensor (GPIO 15)` : 'DHT11 Temp Sensor (GPIO 15)',
+      name: telemetry?.sensor_type ? `${telemetry.sensor_type} Temp Sensor (GPIO 15)` : 'DS18B20 Temp Sensor (GPIO 15)',
       state: telemetry
         ? `${telemetry.temp_c.toFixed(1)}°C ${telemetry.humidity !== undefined ? `| ${telemetry.humidity.toFixed(0)}% RH` : ''} (${telemetry.sim_mode ? 'Simulated' : 'Physical'})`
         : isConnected ? 'CONNECTED (25.0°C)' : 'STANDALONE',
@@ -103,7 +103,7 @@ export const TechnicianScreen: React.FC<TechnicianScreenProps> = ({ onOpenHardwa
 
   const ACTIONS = [
     { id: 'esp32-bridge', label: '⚡ Open ESP32 Live Hardware Modal', highlight: true },
-    { id: 'sim-temp', label: '🔥 Toggle DHT11 Temp Simulation Mode', highlight: false },
+    { id: 'sim-temp', label: '🔥 Toggle Temp Simulation Mode', highlight: false },
     { id: 'pump-prime', label: 'Pump prime / test (GPIO 26)', confirm: true },
     { id: 'stirrer-test', label: 'Stirrer Servo test (GPIO 13)', confirm: true },
     { id: 'pod-test', label: 'Pod Drop Flap Servo test (GPIO 14)', confirm: true },

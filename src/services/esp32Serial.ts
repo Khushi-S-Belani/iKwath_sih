@@ -535,7 +535,7 @@ class ESP32SerialService {
               ds18b20_found: data.ds18b20_found !== undefined ? Boolean(data.ds18b20_found) : (data.temp_sensor_found !== undefined ? Boolean(data.temp_sensor_found) : true),
               temp_sensor_found: data.temp_sensor_found !== undefined ? Boolean(data.temp_sensor_found) : true,
               humidity: typeof data.humidity === 'number' ? data.humidity : undefined,
-              sensor_type: typeof data.sensor_type === 'string' ? data.sensor_type : 'DHT11',
+              sensor_type: typeof data.sensor_type === 'string' ? data.sensor_type : 'DS18B20',
               timestamp: new Date(),
             };
             this.latestTelemetry = telemetry;

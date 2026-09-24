@@ -62,7 +62,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Live ESP32 Precision Hardware Telemetry Bar */}
       <div className="home-telemetry-grid">
-        {/* DHT11 Temp Sensor */}
+        {/* DS18B20 Temp Sensor */}
         <div className="home-tele-tile temp">
           <div className="home-tele-icon-box temp">
             <Flame style={{ width: 18, height: 18 }} />
@@ -72,7 +72,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="home-tele-val temp">
               {liveTemp.toFixed(1)}<span className="home-tele-unit">°C</span>
             </div>
-            <div className="home-tele-sub">DHT11 Sensor Live</div>
+            <div className="home-tele-sub">DS18B20 Sensor Live</div>
           </div>
         </div>
 
