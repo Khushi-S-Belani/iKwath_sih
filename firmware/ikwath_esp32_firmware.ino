@@ -27,7 +27,7 @@
   4. Water Fill: Relay 2 turns pump ON; flows 400 mL via flow sensor on GPIO 18.
   5. Soaking: 5-second timed soaking step.
   6. Heating: Relay 1 turns heater ON; DS18B20 on GPIO 15 monitors until 35°C is reached.
-  7. Stirring: 28BYJ-48 stepper motor stirs continuously in one direction for 10 seconds.
+  7. Stirring: 28BYJ-48 stepper motor stirs continuously in one direction for 20 seconds.
   8. Reduction, Filtration & Dispense: 5s pause each, then ready & 3 victory beeps!
   =============================================================================
 */
@@ -392,13 +392,13 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_STIRRING:
-      // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 10 seconds
+      // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 20 seconds
       setPump(false);
       setHeater(false);
       setStepperActive(true);
       motor.setSpeed(12);
       beep(100, 2);
-      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction (12 RPM)...");
+      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction (12 RPM) for 20s...");
       break;
 
     case PHASE_REDUCTION:
@@ -556,12 +556,12 @@ void runStateMachine() {
       break;
 
     case PHASE_STIRRING:
-      // 5. Stir continuously in one direction for 12 seconds (in smooth non-blocking step chunks)
-      if (elapsedInPhase < 12) {
+      // 5. Stir continuously in one direction for 20 seconds (in smooth non-blocking step chunks)
+      if (elapsedInPhase < 20) {
         motor.step(64);
       } else {
         setStepperActive(false);
-        Serial.println("[STIRRING COMPLETE] 12s one-direction stirring finished.");
+        Serial.println("[STIRRING COMPLETE] 20s one-direction stirring finished.");
         setPhase(PHASE_REDUCTION);
       }
       break;

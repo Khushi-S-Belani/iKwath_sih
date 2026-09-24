@@ -81,7 +81,7 @@ This document contains **detailed, standardized reference tables** for all circu
 | **2** | **`WATER_FILL`** | Relay 2 Pump (GPIO 26) ON | Flow Sensor (GPIO 18) | **400 mL** | Pump fills water chamber. Flow sensor counts pulses. Shuts pump OFF at 400 mL. |
 | **3** | **`SOAKING`** | All Actuators OFF | Internal Timer | **10 Seconds** | Timed herbal soaking transition passes by automatically. |
 | **4** | **`HEATING`** | Relay 1 Heater (GPIO 27) ON | DS18B20 Sensor (GPIO 15) | **85.0°C – 92.0°C** | Heating element active until decoction liquid reaches target. Heater shuts OFF. |
-| **5** | **`STIRRING`** | Stepper Driver (GPIO 13,12,19,23) ON | Internal Timer | **12 Seconds** | 28BYJ-48 stepper agitates chamber for 12s. All 4 driver coils de-energize to LOW. |
+| **5** | **`STIRRING`** | Stepper Driver (GPIO 13,12,19,23) ON | Internal Timer | **20 Seconds** | 28BYJ-48 stepper agitates chamber for 20s. All 4 driver coils de-energize to LOW. |
 | **6** | **`REDUCTION`** | All Actuators OFF | Internal Timer | **15 Seconds** | Timed decoction concentration step displays live mass & reduction curves. |
 | **7** | **`FILTRATION`** | All Actuators OFF | Internal Timer | **10 Seconds** | SS316 stainless steel filtration transition step passes by. |
 | **8** | **`DISPENSING`** | Relay 2 Pump (GPIO 26) ON | Internal Timer | **10 Seconds** | Pump dispenses freshly filtered Kadha into the cup. |
