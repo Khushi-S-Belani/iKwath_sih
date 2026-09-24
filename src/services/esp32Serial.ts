@@ -444,10 +444,6 @@ class ESP32SerialService {
     return await this.sendCommand({ cmd: 'invert_buzzer' });
   }
 
-  public async setFlowCalibration(factor: number): Promise<boolean> {
-    return await this.sendCommand({ cmd: 'set_flow_cal', factor });
-  }
-
   public async startCleaning(): Promise<boolean> {
     return await this.sendCommand({ cmd: 'clean' });
   }
