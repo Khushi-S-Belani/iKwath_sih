@@ -392,13 +392,13 @@ void setPhase(MachinePhase nextPhase) {
       break;
 
     case PHASE_STIRRING:
-      // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 20 seconds
+      // 5. 28BYJ-48 Stepper motor active stirring in one single direction for 30 seconds
       setPump(false);
       setHeater(false);
       setStepperActive(true);
       motor.setSpeed(12);
       beep(100, 2);
-      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction (12 RPM) for 20s...");
+      Serial.println("[STEP 5] Stepper Motor (28BYJ-48 + ULN2003A) STIRRING in one direction (12 RPM) for 30s...");
       break;
 
     case PHASE_REDUCTION:
@@ -556,12 +556,12 @@ void runStateMachine() {
       break;
 
     case PHASE_STIRRING:
-      // 5. Stir continuously in one direction for 20 seconds (in smooth non-blocking step chunks)
-      if (elapsedInPhase < 20) {
+      // 5. Stir continuously in one direction for 30 seconds (in smooth non-blocking step chunks)
+      if (elapsedInPhase < 30) {
         motor.step(64);
       } else {
         setStepperActive(false);
-        Serial.println("[STIRRING COMPLETE] 20s one-direction stirring finished.");
+        Serial.println("[STIRRING COMPLETE] 30s one-direction stirring finished.");
         setPhase(PHASE_REDUCTION);
       }
       break;
@@ -693,7 +693,17 @@ void processSerialCommand(String cmd) {
       if (targetExtractionTemp <= 0 || targetExtractionTemp > 100.0f) targetExtractionTemp = 90.0f;
       Serial.printf("[CONFIG] Kadha: %s | Target Water: %.0f mL | Target Temp: %.0f °C\n",
                     currentRecipeName.c_str(), targetWaterVolumeMl, targetExtractionTemp);
-      startBrewProcess(); // Enters PHASE_POD_DROP, opens servo to 90° and waits for pod insertion & push button press
+
+      if (currentPhase == PHASE_POD_DROP && (action == "start" || action == "start_brew")) {
+        // If already in POD_DROP and start requested -> close gate & start fill
+        Serial.println("[POD INSERTED] Starting Water Fill from Pod Drop state...");
+        setPodFlap(0);
+        beep(100);
+        setPhase(PHASE_WATER_FILL);
+      } else {
+        // Open servo door (90°) and wait for pod insertion & push button
+        startBrewProcess();
+      }
       return;
     } else if (action == "next_phase" || action == "skip_phase" || action == "forward" || action == "next_stage") {
       advanceToNextPhase();

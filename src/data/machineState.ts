@@ -67,13 +67,13 @@ const DEMO_PHASES: { phase: BrewPhase; isSensorGated: boolean; durationSec: numb
   { phase: 'WATER_FILL',  isSensorGated: true,  durationSec: 12 }, // Sensor-gated: Flow sensor / Load cell to 400 mL
   { phase: 'SOAKING',    isSensorGated: false, durationSec: 10 }, // Timed gap: 10s botanical maceration
   { phase: 'HEATING',    isSensorGated: true,  durationSec: 12 }, // Sensor-gated: Temperature to target °C
-  { phase: 'STIRRING',   isSensorGated: false, durationSec: 20 }, // Component agitation: 20s 28BYJ-48 stepper
+  { phase: 'STIRRING',   isSensorGated: false, durationSec: 30 }, // Component agitation: 30s 28BYJ-48 stepper
   { phase: 'REDUCTION',  durationSec: 15, isSensorGated: false }, // Timed gap: 15s decoction mass loss tracking (>= 10s)
   { phase: 'FILTRATION', durationSec: 10, isSensorGated: false }, // Timed gap: 10s SS316 filter separation
   { phase: 'DISPENSING', durationSec: 10, isSensorGated: false }, // Component dispense: 10s peristaltic pump
   { phase: 'COMPLETE',   durationSec:  0, isSensorGated: false },
 ];
-const TOTAL_DEMO_SEC = 87; // ~87 s total baseline
+const TOTAL_DEMO_SEC = 97; // ~97 s total baseline
 
 // ─── Sensor evolution per phase (fallback when no physical ESP32 connected) ───
 function evolveSensor(prev: SensorData, phase: BrewPhase, elapsed: number, targetWaterMl: number = 400, targetTempC: number = 90): SensorData {
@@ -262,7 +262,7 @@ export function useMachineState() {
 
     // Trigger physical hardware brew if ESP32 connected
     if (esp32Serial.isConnected()) {
-      esp32Serial.startBrew(waterMl, effectiveTemp);
+      esp32Serial.confirmPodInserted();
     }
 
     setState((prev) => ({
